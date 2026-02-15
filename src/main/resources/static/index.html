@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Assessment Macchinari</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">⚙️</span>
+            <h1>RAG Assessment</h1>
+        </div>
+        <div class="nav-links">
+            <a href="#documents" class="nav-link active" data-section="documents">📄 Documenti</a>
+            <a href="#machines" class="nav-link" data-section="machines">🔧 Macchinari</a>
+            <a href="#assessments" class="nav-link" data-section="assessments">📊 Assessment</a>
+        </div>
+        <div class="nav-user">
+            <span id="username"></span>
+            <a href="/logout" class="btn btn-logout">Logout</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Sezione Documenti -->
+        <section id="documents" class="section active">
+            <div class="section-header">
+                <h2>📄 Gestione Documenti PDF</h2>
+                <p>Carica i regolamenti e la documentazione per il sistema RAG</p>
+            </div>
+
+            <div class="upload-area" id="dropZone">
+                <div class="upload-icon">📁</div>
+                <h3>Trascina qui i file PDF</h3>
+                <p>oppure</p>
+                <input type="file" id="fileInput" accept=".pdf" hidden>
+                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                    Seleziona File
+                </button>
+                <p class="upload-hint">Solo file PDF, max 50MB</p>
+            </div>
+
+            <div class="upload-progress" id="uploadProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p id="uploadStatus">Caricamento in corso...</p>
+            </div>
+
+            <div class="documents-list">
+                <h3>Documenti Caricati</h3>
+                <div class="table-container">
+                    <table id="documentsTable">
+                        <thead>
+                            <tr>
+                                <th>Nome File</th>
+                                <th>Dimensione</th>
+                                <th>Data Caricamento</th>
+                                <th>Stato</th>
+                                <th>Chunks</th>
+                                <th>Azioni</th>
+                            </tr>
+                        </thead>
+                        <tbody id="documentsBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sezione Macchinari -->
+        <section id="machines" class="section">
+            <div class="section-header">
+                <h2>🔧 Gestione Macchinari</h2>
+                <p>Aggiungi e gestisci i macchinari da analizzare</p>
+            </div>
+
+            <div class="card">
+                <h3>Nuovo Macchinario</h3>
+                <form id="machineForm" class="form-grid">
+                    <div class="form-group">
+                        <label for="machineName">Nome *</label>
+                        <input type="text" id="machineName" required placeholder="Es: Pressa Idraulica XY500">
+                    </div>
+                    <div class="form-group">
+                        <label for="machineProducer">Produttore</label>
+                        <input type="text" id="machineProducer" placeholder="Es: ABC Machinery">
+                    </div>
+                    <div class="form-group">
+                        <label for="machineModel">Modello</label>
+                        <input type="text" id="machineModel" placeholder="Es: XY500-PRO">
+                    </div>
+                    <div class="form-group">
+                        <label for="machineSerial">Numero di Serie</label>
+                        <input type="text" id="machineSerial" placeholder="Es: SN-2024-001234">
+                    </div>
+                    <div class="form-group">
+                        <label for="machineYear">Anno Produzione</label>
+                        <input type="number" id="machineYear" min="1900" max="2100" placeholder="Es: 2024">
+                    </div>
+                    <div class="form-group">
+                        <label for="machineCategory">Categoria</label>
+                        <select id="machineCategory">
+                            <option value="">Seleziona categoria</option>
+                            <option value="Presse">Presse</option>
+                            <option value="Torni">Torni</option>
+                            <option value="Fresatrici">Fresatrici</option>
+                            <option value="Robot industriali">Robot industriali</option>
+                            <option value="Nastri trasportatori">Nastri trasportatori</option>
+                            <option value="Macchine utensili">Macchine utensili</option>
+                            <option value="Macchine per imballaggio">Macchine per imballaggio</option>
+                            <option value="Altro">Altro</option>
+                        </select>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="machineDescription">Descrizione</label>
+                        <textarea id="machineDescription" rows="3" placeholder="Descrizione dettagliata del macchinario..."></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="machineSpecs">Specifiche Tecniche</label>
+                        <textarea id="machineSpecs" rows="4" placeholder="Potenza, dimensioni, funzionalità principali, dispositivi di sicurezza..."></textarea>
+                    </div>
+                    <div class="form-actions full-width">
+                        <button type="submit" class="btn btn-primary">Aggiungi Macchinario</button>
+                        <button type="reset" class="btn btn-secondary">Reset</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="machines-list">
+                <h3>Macchinari Registrati</h3>
+                <div class="machines-grid" id="machinesGrid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Sezione Assessment -->
+        <section id="assessments" class="section">
+            <div class="section-header">
+                <h2>📊 Assessment Conformità</h2>
+                <p>Visualizza e gestisci gli assessment di conformità</p>
+            </div>
+
+            <div class="assessments-list" id="assessmentsList">
+                <!-- Populated by JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal Assessment -->
+    <div class="modal" id="assessmentModal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2 id="modalTitle">Assessment Conformità</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="assessmentDetails">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p>Generazione assessment in corso...</p>
+        <p class="loading-hint">L'analisi potrebbe richiedere alcuni minuti</p>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
