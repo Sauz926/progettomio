@@ -5,6 +5,7 @@ const API_BASE = '/api';
 let documentsTable, machinesGrid, assessmentsList;
 let dropZone, fileInput, uploadProgress, progressFill, uploadStatus;
 let loadingOverlay, assessmentModal;
+let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -12,6 +13,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavigation();
     initFileUpload();
     initMachineForm();
+    initMachineManualUpload();
     loadDocuments();
     loadMachines();
     loadAssessments();
@@ -28,6 +30,9 @@ function initElements() {
     uploadStatus = document.getElementById('uploadStatus');
     loadingOverlay = document.getElementById('loadingOverlay');
     assessmentModal = document.getElementById('assessmentModal');
+    machineManualUploadBtn = document.getElementById('machineManualUploadBtn');
+    machineManualFileInput = document.getElementById('machineManualFileInput');
+    machineManualStatus = document.getElementById('machineManualStatus');
 }
 
 // Navigation
@@ -228,6 +233,103 @@ function initMachineForm() {
             console.error('Error saving machine:', error);
         }
     });
+}
+
+function initMachineManualUpload() {
+    if (!machineManualUploadBtn || !machineManualFileInput) return;
+
+    machineManualUploadBtn.addEventListener('click', () => {
+        machineManualFileInput.click();
+    });
+
+    machineManualFileInput.addEventListener('change', async () => {
+        if (!machineManualFileInput.files || machineManualFileInput.files.length === 0) return;
+        await uploadMachineManual(machineManualFileInput.files[0]);
+    });
+}
+
+async function uploadMachineManual(file) {
+    const isPdf = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+        setMachineManualStatus('✗ Solo file PDF sono accettati', 'error');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setMachineManualStatus('Analisi del manuale in corso...', 'loading');
+    machineManualUploadBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/macchinari/manual/extract`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            const errorMessage = payload?.error || 'Errore durante l\'analisi del manuale';
+            throw new Error(errorMessage);
+        }
+
+        prefillMachineForm(payload);
+        setMachineManualStatus('✓ Campi pre-compilati. Verifica e poi salva.', 'success');
+    } catch (error) {
+        console.error('Manual upload error:', error);
+        setMachineManualStatus(`✗ ${error.message || 'Errore durante l\'analisi del manuale'}`, 'error');
+    } finally {
+        machineManualUploadBtn.disabled = false;
+        machineManualFileInput.value = '';
+    }
+}
+
+function prefillMachineForm(data) {
+    if (!data || typeof data !== 'object') return;
+
+    const setIfPresent = (elementId, value) => {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        if (value === null || value === undefined) return;
+        const stringValue = typeof value === 'string' ? value.trim() : value;
+        if (stringValue === '') return;
+        el.value = stringValue;
+    };
+
+    setIfPresent('machineName', data.nome);
+    setIfPresent('machineProducer', data.produttore);
+    setIfPresent('machineModel', data.modello);
+    setIfPresent('machineSerial', data.numeroSerie);
+    setIfPresent('machineDescription', data.descrizione);
+    setIfPresent('machineSpecs', data.specificheTecniche);
+
+    if (data.annoProduzione !== null && data.annoProduzione !== undefined) {
+        const year = parseInt(data.annoProduzione, 10);
+        if (!Number.isNaN(year)) {
+            setIfPresent('machineYear', year);
+        }
+    }
+
+    if (data.categoria) {
+        const categorySelect = document.getElementById('machineCategory');
+        if (categorySelect) {
+            const optionExists = Array.from(categorySelect.options).some(o => o.value === data.categoria);
+            if (optionExists) {
+                categorySelect.value = data.categoria;
+            }
+        }
+    }
+}
+
+function setMachineManualStatus(message, status) {
+    if (!machineManualStatus) return;
+
+    machineManualStatus.textContent = message || '';
+    machineManualStatus.classList.remove('status-loading', 'status-success', 'status-error');
+    if (status) {
+        machineManualStatus.classList.add(`status-${status}`);
+    }
 }
 
 async function loadMachines() {

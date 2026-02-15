@@ -429,6 +429,30 @@ tr:hover {
     font-size: 0.9rem;
 }
 
+.ai-autofill-callout__hint {
+    margin-top: 0.5rem !important;
+    font-size: 0.85rem !important;
+}
+
+.ai-autofill-callout__status {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    min-height: 1.2em;
+}
+
+.ai-autofill-callout__status.status-loading {
+    color: var(--primary-color);
+}
+
+.ai-autofill-callout__status.status-success {
+    color: #166534;
+}
+
+.ai-autofill-callout__status.status-error {
+    color: #991b1b;
+}
+
 .ai-autofill-callout__actions {
     display: flex;
     align-items: flex-end;

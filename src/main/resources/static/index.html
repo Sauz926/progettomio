@@ -81,16 +81,19 @@
             <div class="card">
                 <h3>Nuovo Macchinario</h3>
 
-                <div class="ai-autofill-callout" aria-label="Compilazione automatica da manuale PDF (in arrivo)">
+                <div class="ai-autofill-callout" aria-label="Compilazione automatica da manuale PDF (AI)">
                     <div class="ai-autofill-callout__text">
                         <div class="ai-autofill-callout__title">
-                            <span class="badge badge-info">Prossimamente</span>
+                            <span class="badge badge-info">AI</span>
                             <h4>🤖 Compila dal manuale PDF</h4>
                         </div>
-                        <p>In futuro potrai caricare il manuale del macchinario e l'AI compilerà automaticamente questo form.</p>
+                        <p>Carica il manuale del macchinario e l'AI pre-compila automaticamente questo form.</p>
+                        <p class="ai-autofill-callout__hint">Solo file PDF. I campi verranno pre-compilati e potrai modificarli prima di salvare.</p>
+                        <div class="ai-autofill-callout__status" id="machineManualStatus" role="status" aria-live="polite"></div>
                     </div>
                     <div class="ai-autofill-callout__actions">
-                        <button type="button" id="machineManualUploadBtn" class="btn btn-secondary" disabled>
+                        <input type="file" id="machineManualFileInput" accept=".pdf" hidden>
+                        <button type="button" id="machineManualUploadBtn" class="btn btn-secondary">
                             📎 Carica manuale PDF (AI)
                         </button>
                     </div>
