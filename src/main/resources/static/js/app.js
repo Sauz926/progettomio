@@ -6,6 +6,11 @@ let documentsTable, machinesGrid, assessmentsList;
 let dropZone, fileInput, uploadProgress, progressFill, uploadStatus;
 let loadingOverlay, assessmentModal;
 let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
+let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
+
+// State
+let editingMachineId = null;
+let machinesById = new Map();
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -33,6 +38,11 @@ function initElements() {
     machineManualUploadBtn = document.getElementById('machineManualUploadBtn');
     machineManualFileInput = document.getElementById('machineManualFileInput');
     machineManualStatus = document.getElementById('machineManualStatus');
+
+    machineForm = document.getElementById('machineForm');
+    machineFormTitle = document.getElementById('machineFormTitle');
+    machineSubmitBtn = document.getElementById('machineSubmitBtn');
+    machineResetBtn = document.getElementById('machineResetBtn');
 }
 
 // Navigation
@@ -200,8 +210,9 @@ function downloadDocument(id) {
 
 // Machines
 function initMachineForm() {
-    const form = document.getElementById('machineForm');
-    form.addEventListener('submit', async (e) => {
+    if (!machineForm) return;
+
+    machineForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const machine = {
@@ -215,24 +226,112 @@ function initMachineForm() {
             specificheTecniche: document.getElementById('machineSpecs').value
         };
 
+        const isEdit = editingMachineId !== null;
+        const url = isEdit ? `${API_BASE}/macchinari/${editingMachineId}` : `${API_BASE}/macchinari`;
+        const method = isEdit ? 'PUT' : 'POST';
+        const submitBtn = machineSubmitBtn || machineForm.querySelector('button[type="submit"]');
+
+        if (submitBtn) submitBtn.disabled = true;
+
         try {
-            const response = await fetch(`${API_BASE}/macchinari`, {
-                method: 'POST',
+            const response = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(machine)
             });
 
             if (response.ok) {
-                form.reset();
+                if (isEdit) {
+                    setMachineFormMode('create');
+                    machineForm.reset();
+                    loadAssessments();
+                    alert('Macchinario aggiornato con successo!');
+                } else {
+                    machineForm.reset();
+                    alert('Macchinario aggiunto con successo!');
+                }
+
                 loadMachines();
-                alert('Macchinario aggiunto con successo!');
             } else {
-                alert('Errore durante il salvataggio');
+                const error = await response.json().catch(() => ({}));
+                alert(error.error || 'Errore durante il salvataggio');
             }
         } catch (error) {
             console.error('Error saving machine:', error);
+            alert('Errore durante il salvataggio');
+        } finally {
+            if (submitBtn) submitBtn.disabled = false;
         }
     });
+
+    machineForm.addEventListener('reset', () => {
+        if (editingMachineId !== null) {
+            setMachineFormMode('create');
+        }
+    });
+}
+
+function setMachineFormMode(mode, machine) {
+    if (mode === 'edit') {
+        if (!machine) return;
+        editingMachineId = machine.id;
+        if (machineFormTitle) machineFormTitle.textContent = `✏️ Modifica Macchinario: ${machine.nome}`;
+        if (machineSubmitBtn) machineSubmitBtn.textContent = '💾 Salva Modifiche';
+        if (machineResetBtn) machineResetBtn.textContent = 'Annulla';
+        return;
+    }
+
+    // default: create mode
+    editingMachineId = null;
+    if (machineFormTitle) machineFormTitle.textContent = 'Nuovo Macchinario';
+    if (machineSubmitBtn) machineSubmitBtn.textContent = 'Aggiungi Macchinario';
+    if (machineResetBtn) machineResetBtn.textContent = 'Reset';
+    setMachineManualStatus('', null);
+}
+
+function fillMachineForm(machine) {
+    if (!machine || typeof machine !== 'object') return;
+
+    const set = (elementId, value) => {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+        el.value = value ?? '';
+    };
+
+    set('machineName', machine.nome);
+    set('machineProducer', machine.produttore);
+    set('machineModel', machine.modello);
+    set('machineSerial', machine.numeroSerie);
+    set('machineYear', machine.annoProduzione);
+    set('machineCategory', machine.categoria);
+    set('machineDescription', machine.descrizione);
+    set('machineSpecs', machine.specificheTecniche);
+}
+
+async function editMachine(id) {
+    let machine = machinesById.get(id);
+
+    if (!machine) {
+        try {
+            const response = await fetch(`${API_BASE}/macchinari/${id}`);
+            if (response.ok) {
+                machine = await response.json();
+            }
+        } catch (error) {
+            console.error('Error loading machine:', error);
+        }
+    }
+
+    if (!machine) {
+        alert('Macchinario non trovato');
+        return;
+    }
+
+    setMachineFormMode('edit', machine);
+    fillMachineForm(machine);
+
+    machineFormTitle?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('machineName')?.focus();
 }
 
 function initMachineManualUpload() {
@@ -337,6 +436,8 @@ async function loadMachines() {
         const response = await fetch(`${API_BASE}/macchinari`);
         const machines = await response.json();
 
+        machinesById = new Map((machines || []).map(m => [m.id, m]));
+
         if (machines.length === 0) {
             machinesGrid.innerHTML = `
                 <div class="empty-state" style="grid-column: 1 / -1;">
@@ -380,7 +481,7 @@ async function loadMachines() {
                         <button class="btn btn-sm btn-secondary" onclick="viewMachineAssessments(${m.id})">
                             📋 Storico
                         </button>
-                        <button class="btn btn-sm btn-secondary" type="button" disabled title="Funzione non ancora disponibile">
+                        <button class="btn btn-sm btn-secondary" type="button" onclick="editMachine(${m.id})" title="Modifica macchinario">
                             ✏️ Modifica
                         </button>
                         <button class="btn btn-sm btn-danger" onclick="deleteMachine(${m.id})">
