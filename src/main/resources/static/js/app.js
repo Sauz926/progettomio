@@ -380,6 +380,9 @@ async function loadMachines() {
                         <button class="btn btn-sm btn-secondary" onclick="viewMachineAssessments(${m.id})">
                             📋 Storico
                         </button>
+                        <button class="btn btn-sm btn-secondary" type="button" disabled title="Funzione non ancora disponibile">
+                            ✏️ Modifica
+                        </button>
                         <button class="btn btn-sm btn-danger" onclick="deleteMachine(${m.id})">
                             🗑️
                         </button>
