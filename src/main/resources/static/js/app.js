@@ -208,6 +208,39 @@ function downloadDocument(id) {
     window.open(`${API_BASE}/documents/${id}/download`, '_blank');
 }
 
+async function downloadLatestAssessmentPdf(machineId) {
+    try {
+        const response = await fetch(`${API_BASE}/macchinari/${machineId}/assessments/latest/pdf`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/pdf' },
+            credentials: 'same-origin'
+        });
+
+        if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            alert(payload?.error || 'Impossibile scaricare il PDF');
+            return;
+        }
+
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get('Content-Disposition') || '';
+        const filename = getFilenameFromContentDisposition(contentDisposition) || `assessment_${machineId}.pdf`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading assessment PDF:', error);
+        alert('Errore durante il download del PDF');
+    }
+}
+
 // Machines
 function initMachineForm() {
     if (!machineForm) return;
@@ -481,7 +514,7 @@ async function loadMachines() {
                         <button class="btn btn-sm btn-secondary" onclick="viewMachineAssessments(${m.id})">
                             📋 Storico
                         </button>
-                        <button class="btn btn-sm btn-secondary" type="button" disabled title="Scarica assessment PDF (non implementato)">
+                        <button class="btn btn-sm btn-secondary" type="button" onclick="downloadLatestAssessmentPdf(${m.id})" title="Scarica l'ultimo assessment in PDF">
                             📥 Scarica PDF
                         </button>
                         <button class="btn btn-sm btn-secondary" type="button" onclick="editMachine(${m.id})" title="Modifica macchinario">
@@ -711,4 +744,24 @@ function getScoreClass(score) {
     if (score >= 70) return 'score-high';
     if (score >= 40) return 'score-medium';
     return 'score-low';
+}
+
+function getFilenameFromContentDisposition(headerValue) {
+    if (!headerValue) return null;
+
+    const filenameStarMatch = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+    if (filenameStarMatch?.[1]) {
+        try {
+            return decodeURIComponent(filenameStarMatch[1]);
+        } catch (_) {
+            return filenameStarMatch[1];
+        }
+    }
+
+    const filenameMatch = headerValue.match(/filename=\"?([^\";]+)\"?/i);
+    if (filenameMatch?.[1]) {
+        return filenameMatch[1];
+    }
+
+    return null;
 }

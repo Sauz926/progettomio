@@ -2,17 +2,23 @@ package it.unicas.spring.springai.controller;
 
 import it.unicas.spring.springai.model.AssessmentResult;
 import it.unicas.spring.springai.model.Macchinario;
+import it.unicas.spring.springai.service.AssessmentPdfService;
 import it.unicas.spring.springai.service.AssessmentService;
 import it.unicas.spring.springai.service.MachineManualExtractionService;
 import it.unicas.spring.springai.service.MacchinarioService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +32,7 @@ public class MacchinarioController {
     private final MacchinarioService macchinarioService;
     private final AssessmentService assessmentService;
     private final MachineManualExtractionService machineManualExtractionService;
+    private final AssessmentPdfService assessmentPdfService;
 
     @PostMapping
     public ResponseEntity<Macchinario> createMacchinario(@RequestBody Macchinario macchinario) {
@@ -124,6 +131,43 @@ public class MacchinarioController {
                 .map(this::mapAssessmentToResponse)
                 .toList();
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{id}/assessments/latest/pdf")
+    public ResponseEntity<?> downloadLatestAssessmentPdf(@PathVariable Long id) {
+        Macchinario macchinario;
+        try {
+            macchinario = macchinarioService.getById(id);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", e.getMessage()));
+        }
+
+        List<AssessmentResult> assessments = assessmentService.getAssessmentsByMacchinario(id);
+        if (assessments.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("error", "Nessun assessment disponibile per questo macchinario"));
+        }
+
+        AssessmentResult latest = assessments.get(0);
+
+        try {
+            byte[] pdf = assessmentPdfService.generateAssessmentPdf(macchinario, latest);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setCacheControl(CacheControl.noStore());
+            headers.setContentDisposition(
+                    ContentDisposition.attachment()
+                            .filename(assessmentPdfService.buildDownloadFilename(macchinario, latest), StandardCharsets.UTF_8)
+                            .build()
+            );
+
+            return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+        } catch (RuntimeException e) {
+            log.error("Error generating assessment PDF for macchinario {} (assessment {})", id, latest.getId(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", e.getMessage()));
+        }
     }
 
     private Map<String, Object> mapAssessmentToResponse(AssessmentResult assessment) {
