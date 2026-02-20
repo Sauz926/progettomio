@@ -4,7 +4,7 @@ const API_BASE = '/api';
 // DOM Elements
 let documentsTable, machinesGrid, assessmentsList;
 let dropZone, fileInput, uploadProgress, progressFill, uploadStatus;
-let loadingOverlay, assessmentModal;
+let loadingOverlay, assessmentModal, assessmentDetails;
 let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
 
@@ -15,6 +15,7 @@ let machinesById = new Map();
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
     initElements();
+    initExplainabilityUi();
     initNavigation();
     initFileUpload();
     initMachineForm();
@@ -35,6 +36,7 @@ function initElements() {
     uploadStatus = document.getElementById('uploadStatus');
     loadingOverlay = document.getElementById('loadingOverlay');
     assessmentModal = document.getElementById('assessmentModal');
+    assessmentDetails = document.getElementById('assessmentDetails');
     machineManualUploadBtn = document.getElementById('machineManualUploadBtn');
     machineManualFileInput = document.getElementById('machineManualFileInput');
     machineManualStatus = document.getElementById('machineManualStatus');
@@ -43,6 +45,25 @@ function initElements() {
     machineFormTitle = document.getElementById('machineFormTitle');
     machineSubmitBtn = document.getElementById('machineSubmitBtn');
     machineResetBtn = document.getElementById('machineResetBtn');
+}
+
+function initExplainabilityUi() {
+    if (!assessmentDetails) return;
+
+    assessmentDetails.addEventListener('click', (e) => {
+        const button = e.target.closest?.('.source-btn');
+        if (!button) return;
+
+        const panelId = button.getAttribute('aria-controls');
+        if (!panelId) return;
+
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+
+        const isExpanded = button.getAttribute('aria-expanded') === 'true';
+        button.setAttribute('aria-expanded', String(!isExpanded));
+        panel.hidden = isExpanded;
+    });
 }
 
 // Navigation
@@ -661,7 +682,14 @@ async function showAssessmentDetail(id) {
 function showAssessmentModal(assessment) {
     document.getElementById('modalTitle').textContent = `Assessment: ${assessment.macchinarioNome}`;
 
-    document.getElementById('assessmentDetails').innerHTML = `
+    if (!assessmentDetails) {
+        assessmentDetails = document.getElementById('assessmentDetails');
+    }
+
+    const nonConformitaItems = toFindingItems(assessment?.nonConformitaRilevate);
+    const raccomandazioniItems = toFindingItems(assessment?.raccomandazioni);
+
+    assessmentDetails.innerHTML = `
         <div class="assessment-score" style="justify-content: center; margin-bottom: 2rem;">
             <div class="score-circle ${getScoreClass(assessment.punteggioConformita)}" style="width: 80px; height: 80px; font-size: 1.5rem;">
                 ${assessment.punteggioConformita || '?'}
@@ -681,12 +709,12 @@ function showAssessmentModal(assessment) {
         
         <div class="assessment-section">
             <h5>⚠️ Non Conformità Rilevate</h5>
-            <p>${assessment.nonConformitaRilevate || 'Nessuna non conformità rilevata'}</p>
+            ${renderFindingList(nonConformitaItems, 'nc', 'Nessuna non conformità rilevata')}
         </div>
         
         <div class="assessment-section">
             <h5>💡 Raccomandazioni</h5>
-            <p>${assessment.raccomandazioni || 'Nessuna raccomandazione'}</p>
+            ${renderFindingList(raccomandazioniItems, 'rec', 'Nessuna raccomandazione')}
         </div>
         
         <div class="assessment-section">
@@ -764,4 +792,166 @@ function getFilenameFromContentDisposition(headerValue) {
     }
 
     return null;
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
+function toFindingItems(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+
+    if (typeof raw !== 'string') return [raw];
+
+    const text = raw.trim();
+    if (!text) return [];
+
+    try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) return parsed;
+    } catch (_) {
+        // ignore
+    }
+
+    return text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => line
+            .replace(/^[-*•]\s+/, '')
+            .replace(/^\d+[.)]\s+/, '')
+            .trim())
+        .filter(Boolean);
+}
+
+function normalizeFinding(finding) {
+    if (typeof finding === 'string') {
+        return { text: finding, sources: [] };
+    }
+
+    if (finding && typeof finding === 'object') {
+        const rawText = finding.testo || finding.text || finding.descrizione || finding.messaggio || '';
+        const text = rawText === null || rawText === undefined ? '' : String(rawText);
+        const sources = finding.fonti || finding.sources || finding.fonte || [];
+        const sourcesArray = Array.isArray(sources) ? sources : [sources];
+        return { text, sources: sourcesArray.filter(Boolean) };
+    }
+
+    return { text: String(finding ?? ''), sources: [] };
+}
+
+function normalizeConfidencePercent(raw) {
+    const num = Number(raw);
+    if (!Number.isFinite(num)) return null;
+
+    if (num > 1) {
+        return Math.max(0, Math.min(100, num));
+    }
+
+    return Math.max(0, Math.min(1, num)) * 100;
+}
+
+function getConfidenceClass(percent) {
+    if (percent === null) return 'confidence-unknown';
+    if (percent >= 80) return 'confidence-high';
+    if (percent >= 50) return 'confidence-medium';
+    return 'confidence-low';
+}
+
+function renderConfidenceBadge(confidence) {
+    const percent = normalizeConfidencePercent(confidence);
+    const label = percent === null ? 'Pertinenza: N/D' : `Pertinenza: ${Math.round(percent)}%`;
+    return `<span class="confidence-badge ${getConfidenceClass(percent)}">🎯 ${escapeHtml(label)}</span>`;
+}
+
+function renderSourceCard(source, index) {
+    if (!source || typeof source !== 'object') {
+        return `
+            <div class="source-card">
+                <div class="source-panel-header">
+                    <div class="source-title">📎 Fonte ${index + 1}</div>
+                    <div class="source-meta">${renderConfidenceBadge(null)}</div>
+                </div>
+                <p class="source-ref"><strong>Riferimento:</strong> ${escapeHtml(source || '—')}</p>
+                <div class="chunk-box"><span class="source-placeholder">— Testo chunk non disponibile</span></div>
+            </div>
+        `;
+    }
+
+    const reference = source.riferimento || source.reference || source.citazione || source.citation || source.ref || source.documentReference || source.documento || '—';
+    const chunk = source.chunk || source.estratto || source.excerpt || source.testo || source.text || '—';
+    const confidence = source.confidence ?? source.score ?? source.similarity ?? source.pertinenza ?? null;
+
+    return `
+        <div class="source-card">
+            <div class="source-panel-header">
+                <div class="source-title">📎 Fonte ${index + 1}</div>
+                <div class="source-meta">${renderConfidenceBadge(confidence)}</div>
+            </div>
+            <p class="source-ref"><strong>Riferimento:</strong> ${escapeHtml(reference)}</p>
+            <div class="chunk-box">${escapeHtml(chunk)}</div>
+        </div>
+    `;
+}
+
+function renderSourcesPanel(sources) {
+    const normalized = Array.isArray(sources) ? sources.filter(Boolean) : [];
+
+    if (normalized.length === 0) {
+        return `
+            <div class="source-panel-header">
+                <div class="source-title">📎 Fonte normativa</div>
+                <div class="source-meta">${renderConfidenceBadge(null)}</div>
+            </div>
+            <p class="source-ref"><strong>Riferimento:</strong> <span class="source-placeholder">— (es: Regolamento UE 2023/1230, Art. 12, c. 3)</span></p>
+            <div class="chunk-box"><span class="source-placeholder">— Qui comparirà il testo esatto del regolamento (chunk recuperato dal RAG)</span></div>
+        `;
+    }
+
+    return normalized.map((s, idx) => renderSourceCard(s, idx)).join('');
+}
+
+function renderFindingList(findings, groupId, emptyMessage = 'Nessuna segnalazione') {
+    const items = Array.isArray(findings) ? findings : [];
+
+    if (items.length === 0) {
+        return `<p>${escapeHtml(emptyMessage)}</p>`;
+    }
+
+    return `
+        <ul class="finding-list">
+            ${items.map((item, index) => {
+                const normalized = normalizeFinding(item);
+                const panelId = `source-${groupId}-${index}`;
+                const findingText = normalized.text?.trim() ? normalized.text : `Segnalazione ${index + 1}`;
+                const sourceLabel = normalized.sources.length > 0 ? `📎 Fonte (${normalized.sources.length})` : '📎 Fonte';
+                return `
+                    <li class="finding-item">
+                        <div class="finding-row">
+                            <div class="finding-text">${escapeHtml(findingText)}</div>
+                            <div class="finding-actions">
+                                <button type="button"
+                                        class="btn btn-sm btn-secondary source-btn"
+                                        title="Mostra fonte normativa"
+                                        aria-expanded="false"
+                                        aria-controls="${escapeHtml(panelId)}">
+                                    ${escapeHtml(sourceLabel)}
+                                </button>
+                            </div>
+                        </div>
+                        <div id="${escapeHtml(panelId)}" class="source-panel" hidden>
+                            ${renderSourcesPanel(normalized.sources)}
+                        </div>
+                    </li>
+                `;
+            }).join('')}
+        </ul>
+    `;
 }
