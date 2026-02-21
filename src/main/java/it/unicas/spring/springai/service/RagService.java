@@ -90,12 +90,14 @@ public class RagService {
                 .map(doc -> {
                     log.info("Document metadata: {}", doc.getMetadata());  // Debug
                     Map<String, Object> metadata = doc.getMetadata();
-                    if (metadata.containsKey("source")) {
-                        return metadata.get("source").toString();
+                    if (metadata.containsKey("fileName")) {
+                        return metadata.get("fileName").toString();
                     } else if (metadata.containsKey("file_name")) {
                         return metadata.get("file_name").toString();
                     } else if (metadata.containsKey("filename")) {
                         return metadata.get("filename").toString();
+                    } else if (metadata.containsKey("source")) {
+                        return metadata.get("source").toString();
                     }
                     return "Documento sconosciuto";
                 })

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,32 +71,66 @@ public class PdfIngestionService {
             TextSplitter textSplitter = new TokenTextSplitter();
             List<Document> chunks = textSplitter.apply(documents);
 
-            // Aggiungi metadata a ogni chunk
-            for (Document chunk : chunks) {
+            // Aggiungi metadata a ogni chunk (Document è immutabile: crea una copia arricchita)
+            List<Document> enrichedChunks = new ArrayList<>(chunks.size());
+            for (int i = 0; i < chunks.size(); i++) {
+                Document chunk = chunks.get(i);
                 Map<String, Object> metadata = new HashMap<>(chunk.getMetadata());
                 metadata.put("documentId", documentEntity.getId());
                 metadata.put("fileName", documentEntity.getOriginalFileName());
                 metadata.put("source", "uploaded_pdf");
-                log.info("Chunk metadata: {}", metadata);
+                metadata.put("chunkIndex", i + 1);
+
+                Integer page = extractPageNumber(metadata);
+                if (page != null) {
+                    metadata.put("page", page);
+                }
+
+                enrichedChunks.add(chunk.mutate().metadata(metadata).build());
             }
 
             // Salva nel vector store
-            log.info("Adding {} chunks to vector store for document: {}", chunks.size(), documentEntity.getOriginalFileName());
-            vectorStore.add(chunks);
+            log.info("Adding {} chunks to vector store for document: {}", enrichedChunks.size(), documentEntity.getOriginalFileName());
+            vectorStore.add(enrichedChunks);
 
             log.info("Update document status to processed for: {}", documentEntity.getOriginalFileName());
             // Aggiorna lo stato del documento
             documentEntity.setProcessed(true);
-            documentEntity.setChunkCount(chunks.size());
+            documentEntity.setChunkCount(enrichedChunks.size());
             documentRepository.save(documentEntity);
 
             log.info("Successfully processed {} chunks for document: {}",
-                    chunks.size(), documentEntity.getOriginalFileName());
+                    enrichedChunks.size(), documentEntity.getOriginalFileName());
 
         } catch (Exception e) {
             log.error("Error processing PDF: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to process PDF: " + e.getMessage(), e);
         }
+    }
+
+    private Integer extractPageNumber(Map<String, Object> metadata) {
+        if (metadata == null || metadata.isEmpty()) return null;
+
+        Object page = metadata.get("page");
+        if (page == null) page = metadata.get("page_number");
+        if (page == null) page = metadata.get("pageNumber");
+        if (page == null) page = metadata.get("page-number");
+
+        if (page instanceof Number number) {
+            return number.intValue();
+        }
+
+        if (page instanceof String str) {
+            String digits = str.replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) return null;
+            try {
+                return Integer.parseInt(digits);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        return null;
     }
 
     public List<DocumentEntity> getAllDocuments() {

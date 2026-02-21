@@ -1,7 +1,10 @@
 package it.unicas.spring.springai.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import it.unicas.spring.springai.model.AssessmentResult;
 import it.unicas.spring.springai.model.Macchinario;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -24,6 +27,7 @@ import java.util.Locale;
 
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class AssessmentPdfService {
 
     private static final PDRectangle PAGE_SIZE = PDRectangle.A4;
@@ -42,6 +46,8 @@ public class AssessmentPdfService {
 
     private static final DateTimeFormatter DATE_TIME_FILENAME = DateTimeFormatter.ofPattern("yyyyMMdd_HHmm", Locale.ROOT);
     private static final DateTimeFormatter DATE_TIME_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.ITALY);
+
+    private final ObjectMapper objectMapper;
 
     public byte[] generateAssessmentPdf(Macchinario macchinario, AssessmentResult assessment) {
         try (PDDocument document = new PDDocument()) {
@@ -86,11 +92,11 @@ public class AssessmentPdfService {
             flow.blankLine(LEADING_BODY);
 
             flow.writeSection("Non conformità rilevate");
-            flow.writeParagraph(safe(assessment != null ? assessment.getNonConformitaRilevate() : null, "Nessuna non conformità rilevata"));
+            flow.writeParagraph(formatExplainableList(safe(assessment != null ? assessment.getNonConformitaRilevate() : null, ""), "Nessuna non conformità rilevata"));
             flow.blankLine(LEADING_BODY);
 
             flow.writeSection("Raccomandazioni");
-            flow.writeParagraph(safe(assessment != null ? assessment.getRaccomandazioni() : null, "Nessuna raccomandazione"));
+            flow.writeParagraph(formatExplainableList(safe(assessment != null ? assessment.getRaccomandazioni() : null, ""), "Nessuna raccomandazione"));
             flow.blankLine(LEADING_BODY);
 
             flow.writeSection("Documenti utilizzati");
@@ -132,6 +138,45 @@ public class AssessmentPdfService {
         if (value == null) return fallback;
         String text = value.toString().trim();
         return text.isEmpty() ? fallback : text;
+    }
+
+    private String formatExplainableList(String raw, String fallback) {
+        String value = raw == null ? "" : raw.trim();
+        if (value.isEmpty()) return fallback;
+
+        JsonNode node;
+        try {
+            node = objectMapper.readTree(value);
+        } catch (Exception e) {
+            return value;
+        }
+
+        if (!node.isArray()) {
+            return value;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (JsonNode item : node) {
+            if (item == null || item.isNull()) continue;
+
+            String text;
+            if (item.isTextual()) {
+                text = item.asText("");
+            } else {
+                text = item.path("text").asText("");
+                if (text.isBlank()) {
+                    text = item.path("testo").asText("");
+                }
+            }
+
+            text = text == null ? "" : text.trim();
+            if (text.isEmpty()) continue;
+
+            if (!sb.isEmpty()) sb.append('\n');
+            sb.append("• ").append(text);
+        }
+
+        return sb.isEmpty() ? fallback : sb.toString();
     }
 
     private String sanitizeFilenamePart(String input, String fallback) {
