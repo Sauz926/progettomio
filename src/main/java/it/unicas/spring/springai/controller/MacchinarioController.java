@@ -35,7 +35,12 @@ public class MacchinarioController {
     private final AssessmentPdfService assessmentPdfService;
 
     @PostMapping
-    public ResponseEntity<Macchinario> createMacchinario(@RequestBody Macchinario macchinario) {
+    public ResponseEntity<?> createMacchinario(@RequestBody Macchinario macchinario) {
+        if (macchinario == null || macchinario.getNome() == null || macchinario.getNome().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Il nome è obbligatorio"));
+        }
+
+        macchinario.setNome(macchinario.getNome().trim());
         Macchinario created = macchinarioService.create(macchinario);
         return ResponseEntity.ok(created);
     }
@@ -55,7 +60,12 @@ public class MacchinarioController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Macchinario> updateMacchinario(@PathVariable Long id, @RequestBody Macchinario macchinario) {
+    public ResponseEntity<?> updateMacchinario(@PathVariable Long id, @RequestBody Macchinario macchinario) {
+        if (macchinario == null || macchinario.getNome() == null || macchinario.getNome().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Il nome è obbligatorio"));
+        }
+
+        macchinario.setNome(macchinario.getNome().trim());
         try {
             return ResponseEntity.ok(macchinarioService.update(id, macchinario));
         } catch (RuntimeException e) {
