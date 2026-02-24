@@ -30,7 +30,7 @@ public class DocumentController {
             return ResponseEntity.badRequest().body(Map.of("error", "Il file è vuoto"));
         }
 
-        if (!file.getContentType().equals("application/pdf")) {
+        if (!MediaType.APPLICATION_PDF_VALUE.equals(file.getContentType())) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solo file PDF sono accettati"));
         }
 

@@ -103,7 +103,7 @@ public class MacchinarioController {
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "";
         boolean looksLikePdf = originalName.toLowerCase().endsWith(".pdf");
 
-        if (contentType != null && !contentType.equals("application/pdf") && !looksLikePdf) {
+        if (!looksLikePdf && !MediaType.APPLICATION_PDF_VALUE.equals(contentType)) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solo file PDF sono accettati"));
         }
 
