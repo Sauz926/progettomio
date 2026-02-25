@@ -114,7 +114,7 @@ function initAssessmentModalUi() {
             const form = e.target.closest?.('.chat-composer');
             if (!form) return;
             e.preventDefault();
-            submitAssessmentChat(form);
+            submitAssessmentChat(form).catch((err) => console.error('Chat submit error:', err));
         });
 
         assessmentDetails.addEventListener('keydown', (e) => {
@@ -958,7 +958,7 @@ function ensureAssessmentChatThread(assessmentId, macchinarioNome) {
             role: 'assistant',
             text: [
                 'Ciao! Sono qui per aiutarti a capire i difetti trovati e come risolverli.',
-                'Questa è la UI della chat: l\'integrazione con l\'assistente AI verrà collegata nel prossimo task.'
+                'Fammi una domanda sulle non conformità o sulle raccomandazioni visibili in questa pagina.'
             ].join('\n'),
             ts: Date.now()
         }]
@@ -997,7 +997,19 @@ function updateAssessmentChatMessage(assessmentId, messageId, patch) {
     Object.assign(msg, patch);
 }
 
-function submitAssessmentChat(form) {
+function buildAssessmentChatHistory(assessmentId, maxMessages = 10) {
+    const thread = assessmentChatThreads.get(assessmentId);
+    const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+
+    return messages
+        .filter(m => !m?.pending)
+        .filter(m => m?.role === 'user' || m?.role === 'assistant')
+        .filter(m => (m?.text || '').trim().length > 0)
+        .slice(-maxMessages)
+        .map(m => ({ role: m.role, content: m.text }));
+}
+
+async function submitAssessmentChat(form) {
     const layout = form.closest('.assessment-layout');
     const assessmentId = Number(layout?.getAttribute('data-assessment-id'));
     if (!layout || !Number.isFinite(assessmentId)) return;
@@ -1005,6 +1017,9 @@ function submitAssessmentChat(form) {
     const input = form.querySelector('.chat-input');
     const text = input?.value?.trim?.() || '';
     if (!text) return;
+
+    ensureAssessmentChatThread(assessmentId, currentAssessmentContext?.macchinarioNome || '');
+    const history = buildAssessmentChatHistory(assessmentId, 10);
 
     input.value = '';
     autoResizeChatInput(input);
@@ -1014,19 +1029,41 @@ function submitAssessmentChat(form) {
 
     renderAssessmentChatIntoLayout(layout, assessmentId);
 
-    window.setTimeout(() => {
-        if (!pendingId) return;
-        const machineName = currentAssessmentContext?.id === assessmentId ? currentAssessmentContext.macchinarioNome : '';
+    const sendBtn = form.querySelector('.chat-send-btn');
+    if (sendBtn) sendBtn.disabled = true;
+    if (input) input.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/assessments/${assessmentId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ question: text, history })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload?.error || 'Errore durante la chat');
+        }
+
+        const answer = (payload?.answer || '').toString().trim();
         updateAssessmentChatMessage(assessmentId, pendingId, {
             pending: false,
-            text: [
-                '(Demo UI) Ho ricevuto la tua domanda.',
-                machineName ? `Macchinario: ${machineName}` : null,
-                'Nel prossimo step collegheremo l\'assistente AI per rispondere usando i risultati dell\'assessment e le fonti normative.'
-            ].filter(Boolean).join('\n')
+            text: answer || 'Risposta non disponibile.'
         });
+    } catch (error) {
+        updateAssessmentChatMessage(assessmentId, pendingId, {
+            pending: false,
+            text: `✗ ${error?.message || 'Errore durante la chat'}`
+        });
+    } finally {
+        if (input) {
+            input.disabled = false;
+            input.focus();
+        }
+        if (sendBtn) sendBtn.disabled = false;
         renderAssessmentChatIntoLayout(layout, assessmentId);
-    }, 650);
+    }
 }
 
 function renderAssessmentChatIntoLayout(layout, assessmentId) {
