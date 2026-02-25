@@ -12,10 +12,14 @@ let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
 let editingMachineId = null;
 let machinesById = new Map();
 
+// Chat state (UI-only)
+let currentAssessmentContext = null;
+let assessmentChatThreads = new Map();
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
     initElements();
-    initExplainabilityUi();
+    initAssessmentModalUi();
     initNavigation();
     initFileUpload();
     initMachineForm();
@@ -47,22 +51,99 @@ function initElements() {
     machineResetBtn = document.getElementById('machineResetBtn');
 }
 
-function initExplainabilityUi() {
-    if (!assessmentDetails) return;
+function initAssessmentModalUi() {
+    if (assessmentDetails) {
+        assessmentDetails.addEventListener('click', (e) => {
+            const sourceButton = e.target.closest?.('.source-btn');
+            if (sourceButton) {
+                const panelId = sourceButton.getAttribute('aria-controls');
+                if (!panelId) return;
 
-    assessmentDetails.addEventListener('click', (e) => {
-        const button = e.target.closest?.('.source-btn');
-        if (!button) return;
+                const panel = document.getElementById(panelId);
+                if (!panel) return;
 
-        const panelId = button.getAttribute('aria-controls');
-        if (!panelId) return;
+                const isExpanded = sourceButton.getAttribute('aria-expanded') === 'true';
+                sourceButton.setAttribute('aria-expanded', String(!isExpanded));
+                panel.hidden = isExpanded;
+                return;
+            }
 
-        const panel = document.getElementById(panelId);
-        if (!panel) return;
+            const tabButton = e.target.closest?.('.assessment-tab');
+            if (tabButton) {
+                const layout = tabButton.closest('.assessment-layout');
+                const panel = tabButton.getAttribute('data-panel');
+                if (!layout || !panel) return;
+                setAssessmentActivePanel(layout, panel);
+                return;
+            }
 
-        const isExpanded = button.getAttribute('aria-expanded') === 'true';
-        button.setAttribute('aria-expanded', String(!isExpanded));
-        panel.hidden = isExpanded;
+            const askButton = e.target.closest?.('.ask-assistant-btn');
+            if (askButton) {
+                const layout = askButton.closest('.assessment-layout');
+                const question = askButton.getAttribute('data-question') || '';
+                if (!layout || !question) return;
+                setAssessmentActivePanel(layout, 'chat');
+                prefillAssessmentChatInput(layout, question);
+                return;
+            }
+
+            const suggestionButton = e.target.closest?.('.chat-suggestion');
+            if (suggestionButton) {
+                const layout = suggestionButton.closest('.assessment-layout');
+                const question = suggestionButton.getAttribute('data-question') || '';
+                if (!layout || !question) return;
+                setAssessmentActivePanel(layout, 'chat');
+                prefillAssessmentChatInput(layout, question);
+                return;
+            }
+
+            const resetButton = e.target.closest?.('.chat-reset-btn');
+            if (resetButton) {
+                const layout = resetButton.closest('.assessment-layout');
+                const assessmentId = Number(layout?.getAttribute('data-assessment-id'));
+                if (!layout || !Number.isFinite(assessmentId)) return;
+
+                if (!confirm('Vuoi cancellare la chat per questo assessment?')) return;
+                resetAssessmentChatThread(assessmentId);
+                renderAssessmentChatIntoLayout(layout, assessmentId);
+                return;
+            }
+        });
+
+        assessmentDetails.addEventListener('submit', (e) => {
+            const form = e.target.closest?.('.chat-composer');
+            if (!form) return;
+            e.preventDefault();
+            submitAssessmentChat(form);
+        });
+
+        assessmentDetails.addEventListener('keydown', (e) => {
+            const input = e.target.closest?.('.chat-input');
+            if (!input) return;
+
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                input.closest('form')?.requestSubmit();
+            }
+        });
+
+        assessmentDetails.addEventListener('input', (e) => {
+            const input = e.target.closest?.('.chat-input');
+            if (!input) return;
+            autoResizeChatInput(input);
+        });
+    }
+
+    if (assessmentModal) {
+        assessmentModal.addEventListener('click', (e) => {
+            if (e.target === assessmentModal) closeModal();
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!assessmentModal?.classList.contains('active')) return;
+        closeModal();
     });
 }
 
@@ -686,61 +767,355 @@ function showAssessmentModal(assessment) {
         assessmentDetails = document.getElementById('assessmentDetails');
     }
 
+    const assessmentId = Number(assessment?.id);
+    currentAssessmentContext = Number.isFinite(assessmentId) ? {
+        id: assessmentId,
+        macchinarioId: assessment?.macchinarioId ?? null,
+        macchinarioNome: assessment?.macchinarioNome ?? '',
+        livelloRischio: assessment?.livelloRischio ?? null,
+        punteggioConformita: assessment?.punteggioConformita ?? null,
+        dataAssessment: assessment?.dataAssessment ?? null
+    } : null;
+
     const nonConformitaItems = toFindingItems(assessment?.nonConformitaRilevate);
     const raccomandazioniItems = toFindingItems(assessment?.raccomandazioni);
 
+    const chatThread = ensureAssessmentChatThread(assessmentId, assessment?.macchinarioNome);
+    const chatSuggestions = buildAssessmentChatSuggestions(nonConformitaItems, raccomandazioniItems);
+
     assessmentDetails.innerHTML = `
-        <div class="assessment-score" style="justify-content: center; margin-bottom: 2rem;">
-            <div class="score-circle ${getScoreClass(assessment.punteggioConformita)}" style="width: 80px; height: 80px; font-size: 1.5rem;">
-                ${assessment.punteggioConformita || '?'}
+        <div class="assessment-layout" data-assessment-id="${Number.isFinite(assessmentId) ? assessmentId : ''}" data-active-panel="results">
+            <div class="assessment-layout__tabs" role="tablist" aria-label="Schede risultati/chat">
+                <button type="button" class="assessment-tab is-active" data-panel="results" role="tab" aria-selected="true">
+                    📊 Risultati
+                </button>
+                <button type="button" class="assessment-tab" data-panel="chat" role="tab" aria-selected="false">
+                    💬 Chat
+                </button>
             </div>
-            <div style="text-align: left;">
-                <p style="font-size: 0.875rem; color: var(--text-secondary);">Punteggio Conformità</p>
-                <span class="risk-badge risk-${assessment.livelloRischio?.toLowerCase() || 'medio'}">
-                    Rischio ${assessment.livelloRischio || 'N/D'}
-                </span>
+
+            <div class="assessment-layout__grid">
+                <div class="assessment-results" data-panel="results" role="tabpanel">
+                    <div class="assessment-score" style="justify-content: center; margin-bottom: 2rem;">
+                        <div class="score-circle ${getScoreClass(assessment.punteggioConformita)}" style="width: 80px; height: 80px; font-size: 1.5rem;">
+                            ${assessment.punteggioConformita || '?'}
+                        </div>
+                        <div style="text-align: left;">
+                            <p style="font-size: 0.875rem; color: var(--text-secondary);">Punteggio Conformità</p>
+                            <span class="risk-badge risk-${assessment.livelloRischio?.toLowerCase() || 'medio'}">
+                                Rischio ${assessment.livelloRischio || 'N/D'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="assessment-section">
+                        <h5>📋 Riepilogo Conformità</h5>
+                        <p>${assessment.riepilogoConformita || 'Non disponibile'}</p>
+                    </div>
+
+                    <div class="assessment-section">
+                        <h5>⚠️ Non Conformità Rilevate</h5>
+                        ${renderFindingList(nonConformitaItems, 'nc', 'Nessuna non conformità rilevata')}
+                    </div>
+
+                    <div class="assessment-section">
+                        <h5>💡 Raccomandazioni</h5>
+                        ${renderFindingList(raccomandazioniItems, 'rec', 'Nessuna raccomandazione')}
+                    </div>
+
+                    <div class="assessment-section">
+                        <h5>📄 Documenti Utilizzati</h5>
+                        <p>${assessment.documentiUtilizzati || 'Nessun documento di riferimento'}</p>
+                    </div>
+
+                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem;">
+                        <p>Data Assessment: ${formatDate(assessment.dataAssessment)}</p>
+                        <p>Versione: ${assessment.versione || '1.0'}</p>
+                    </div>
+                </div>
+
+                <aside class="assessment-chat" data-panel="chat" role="tabpanel" aria-label="Chat assistente sui risultati">
+                    <div class="chat-header">
+                        <div class="chat-header__title">
+                            <span class="badge badge-info">AI</span>
+                            <div>
+                                <h3>Chat sui risultati</h3>
+                                <p class="chat-header__subtitle">${escapeHtml(assessment?.macchinarioNome || 'Macchinario')}</p>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-secondary chat-reset-btn" title="Nuova chat" aria-label="Nuova chat">
+                            🔄
+                        </button>
+                    </div>
+
+                    <div class="chat-suggestions" aria-label="Domande rapide">
+                        ${renderAssessmentChatSuggestionsHtml(chatSuggestions)}
+                    </div>
+
+                    <p class="chat-hint">
+                        Suggerimento: usa <strong>💬 Chat</strong> accanto alle non conformità per precompilare una domanda mirata.
+                    </p>
+
+                    <div class="chat-messages" data-chat-messages role="log" aria-live="polite" aria-relevant="additions">
+                        ${renderAssessmentChatMessagesHtml(chatThread?.messages || [])}
+                    </div>
+
+                    <form class="chat-composer" autocomplete="off">
+                        <label class="sr-only" for="assessmentChatInput">Messaggio</label>
+                        <textarea id="assessmentChatInput"
+                                  class="chat-input"
+                                  data-chat-input="assessment"
+                                  rows="1"
+                                  placeholder="Fai una domanda su difetti e raccomandazioni…"></textarea>
+                        <button type="submit" class="btn btn-primary chat-send-btn">Invia</button>
+                    </form>
+                </aside>
             </div>
-        </div>
-        
-        <div class="assessment-section">
-            <h5>📋 Riepilogo Conformità</h5>
-            <p>${assessment.riepilogoConformita || 'Non disponibile'}</p>
-        </div>
-        
-        <div class="assessment-section">
-            <h5>⚠️ Non Conformità Rilevate</h5>
-            ${renderFindingList(nonConformitaItems, 'nc', 'Nessuna non conformità rilevata')}
-        </div>
-        
-        <div class="assessment-section">
-            <h5>💡 Raccomandazioni</h5>
-            ${renderFindingList(raccomandazioniItems, 'rec', 'Nessuna raccomandazione')}
-        </div>
-        
-        <div class="assessment-section">
-            <h5>📄 Documenti Utilizzati</h5>
-            <p>${assessment.documentiUtilizzati || 'Nessun documento di riferimento'}</p>
-        </div>
-        
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem;">
-            <p>Data Assessment: ${formatDate(assessment.dataAssessment)}</p>
-            <p>Versione: ${assessment.versione || '1.0'}</p>
         </div>
     `;
 
     assessmentModal.classList.add('active');
+
+    requestAnimationFrame(() => {
+        const layout = assessmentDetails?.querySelector?.('.assessment-layout');
+        if (!layout || !Number.isFinite(assessmentId)) return;
+        renderAssessmentChatIntoLayout(layout, assessmentId);
+    });
 }
 
 function closeModal() {
     assessmentModal.classList.remove('active');
+    currentAssessmentContext = null;
 }
 
-// Close modal on outside click
-assessmentModal?.addEventListener('click', (e) => {
-    if (e.target === assessmentModal) {
-        closeModal();
+function setAssessmentActivePanel(layout, panel) {
+    if (!layout || !panel) return;
+    layout.setAttribute('data-active-panel', panel);
+
+    const tabs = layout.querySelectorAll('.assessment-tab');
+    tabs.forEach((tab) => {
+        const isActive = tab.getAttribute('data-panel') === panel;
+        tab.classList.toggle('is-active', isActive);
+        tab.setAttribute('aria-selected', String(isActive));
+    });
+
+    if (panel === 'chat') {
+        const input = layout.querySelector('.chat-input');
+        if (input) {
+            input.focus();
+            input.setSelectionRange?.(input.value.length, input.value.length);
+            autoResizeChatInput(input);
+        }
+
+        const messages = layout.querySelector('[data-chat-messages]');
+        if (messages) {
+            requestAnimationFrame(() => {
+                try {
+                    messages.scrollTop = messages.scrollHeight;
+                } catch (_) {
+                    // ignore
+                }
+            });
+        }
     }
-});
+}
+
+function prefillAssessmentChatInput(layout, question) {
+    const input = layout?.querySelector?.('.chat-input');
+    if (!input) return;
+
+    input.value = question;
+    autoResizeChatInput(input);
+    input.focus();
+    input.setSelectionRange?.(input.value.length, input.value.length);
+}
+
+function autoResizeChatInput(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const max = 140;
+    textarea.style.height = `${Math.min(textarea.scrollHeight, max)}px`;
+}
+
+function createChatMessageId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function ensureAssessmentChatThread(assessmentId, macchinarioNome) {
+    if (!Number.isFinite(assessmentId)) return null;
+
+    let thread = assessmentChatThreads.get(assessmentId);
+    if (thread) return thread;
+
+    thread = {
+        assessmentId,
+        macchinarioNome: macchinarioNome || '',
+        messages: [{
+            id: createChatMessageId(),
+            role: 'assistant',
+            text: [
+                'Ciao! Sono qui per aiutarti a capire i difetti trovati e come risolverli.',
+                'Questa è la UI della chat: l\'integrazione con l\'assistente AI verrà collegata nel prossimo task.'
+            ].join('\n'),
+            ts: Date.now()
+        }]
+    };
+
+    assessmentChatThreads.set(assessmentId, thread);
+    return thread;
+}
+
+function resetAssessmentChatThread(assessmentId) {
+    const machineName = assessmentChatThreads.get(assessmentId)?.macchinarioNome || currentAssessmentContext?.macchinarioNome || '';
+    assessmentChatThreads.delete(assessmentId);
+    ensureAssessmentChatThread(assessmentId, machineName);
+}
+
+function addAssessmentChatMessage(assessmentId, role, text, options = {}) {
+    const thread = ensureAssessmentChatThread(assessmentId, currentAssessmentContext?.macchinarioNome || '');
+    if (!thread) return null;
+
+    const message = {
+        id: createChatMessageId(),
+        role,
+        text,
+        ts: Date.now(),
+        pending: Boolean(options.pending)
+    };
+    thread.messages.push(message);
+    return message.id;
+}
+
+function updateAssessmentChatMessage(assessmentId, messageId, patch) {
+    const thread = assessmentChatThreads.get(assessmentId);
+    if (!thread) return;
+    const msg = thread.messages.find(m => m.id === messageId);
+    if (!msg) return;
+    Object.assign(msg, patch);
+}
+
+function submitAssessmentChat(form) {
+    const layout = form.closest('.assessment-layout');
+    const assessmentId = Number(layout?.getAttribute('data-assessment-id'));
+    if (!layout || !Number.isFinite(assessmentId)) return;
+
+    const input = form.querySelector('.chat-input');
+    const text = input?.value?.trim?.() || '';
+    if (!text) return;
+
+    input.value = '';
+    autoResizeChatInput(input);
+
+    addAssessmentChatMessage(assessmentId, 'user', text);
+    const pendingId = addAssessmentChatMessage(assessmentId, 'assistant', 'Sto elaborando…', { pending: true });
+
+    renderAssessmentChatIntoLayout(layout, assessmentId);
+
+    window.setTimeout(() => {
+        if (!pendingId) return;
+        const machineName = currentAssessmentContext?.id === assessmentId ? currentAssessmentContext.macchinarioNome : '';
+        updateAssessmentChatMessage(assessmentId, pendingId, {
+            pending: false,
+            text: [
+                '(Demo UI) Ho ricevuto la tua domanda.',
+                machineName ? `Macchinario: ${machineName}` : null,
+                'Nel prossimo step collegheremo l\'assistente AI per rispondere usando i risultati dell\'assessment e le fonti normative.'
+            ].filter(Boolean).join('\n')
+        });
+        renderAssessmentChatIntoLayout(layout, assessmentId);
+    }, 650);
+}
+
+function renderAssessmentChatIntoLayout(layout, assessmentId) {
+    const messagesEl = layout?.querySelector?.('[data-chat-messages]');
+    if (!messagesEl) return;
+
+    const thread = ensureAssessmentChatThread(assessmentId, currentAssessmentContext?.macchinarioNome || '');
+    messagesEl.innerHTML = renderAssessmentChatMessagesHtml(thread?.messages || []);
+
+    requestAnimationFrame(() => {
+        try {
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        } catch (_) {
+            // ignore
+        }
+    });
+}
+
+function renderAssessmentChatMessagesHtml(messages) {
+    const items = Array.isArray(messages) ? messages : [];
+    return items.map(renderAssessmentChatMessageHtml).join('');
+}
+
+function renderAssessmentChatMessageHtml(message) {
+    const role = message?.role === 'user' ? 'user' : 'assistant';
+    const bubbleClass = role === 'user' ? 'chat-message--user' : 'chat-message--assistant';
+    const pending = message?.pending ? ' <span class="chat-pending">•</span>' : '';
+    const text = message?.text || '';
+    const content = escapeHtml(text).replaceAll('\n', '<br>');
+    const time = message?.ts ? new Date(message.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+    return `
+        <div class="chat-message ${bubbleClass}">
+            <div class="chat-bubble">${content}${pending}</div>
+            <div class="chat-meta">${escapeHtml(time)}</div>
+        </div>
+    `;
+}
+
+function buildAssessmentChatSuggestions(nonConformitaItems, raccomandazioniItems) {
+    const suggestions = [];
+    const nonConformita = Array.isArray(nonConformitaItems) ? nonConformitaItems : [];
+    const raccomandazioni = Array.isArray(raccomandazioniItems) ? raccomandazioniItems : [];
+
+    const topFinding = nonConformita.length > 0 ? normalizeFinding(nonConformita[0]).text : '';
+    if (topFinding) {
+        suggestions.push({
+            label: 'Spiega la principale non conformità',
+            question: buildQuestionForFinding(topFinding)
+        });
+    }
+
+    suggestions.push({
+        label: 'Priorità interventi',
+        question: 'Quali sono le priorità di intervento e i rischi principali in base a questo assessment?'
+    });
+
+    if (raccomandazioni.length > 0) {
+        suggestions.push({
+            label: 'Piano di azione',
+            question: 'Puoi propormi un piano di azione step-by-step per risolvere le non conformità e applicare le raccomandazioni?'
+        });
+    }
+
+    if (nonConformita.length > 1) {
+        const secondFinding = normalizeFinding(nonConformita[1]).text;
+        if (secondFinding) {
+            suggestions.push({
+                label: 'Spiega un\'altra non conformità',
+                question: buildQuestionForFinding(secondFinding)
+            });
+        }
+    }
+
+    return suggestions.slice(0, 4);
+}
+
+function renderAssessmentChatSuggestionsHtml(suggestions) {
+    const items = Array.isArray(suggestions) ? suggestions : [];
+    if (items.length === 0) return '';
+    return items.map(s => {
+        const label = truncate(s.label || 'Domanda rapida', 42);
+        const question = s.question || '';
+        return `
+            <button type="button" class="chat-suggestion" data-question="${escapeHtml(question)}" title="${escapeHtml(question)}">
+                ${escapeHtml(label)}
+            </button>
+        `;
+    }).join('');
+}
 
 // Utility functions
 function formatFileSize(bytes) {
@@ -932,11 +1307,18 @@ function renderFindingList(findings, groupId, emptyMessage = 'Nessuna segnalazio
                 const panelId = `source-${groupId}-${index}`;
                 const findingText = normalized.text?.trim() ? normalized.text : `Segnalazione ${index + 1}`;
                 const sourceLabel = normalized.sources.length > 0 ? `📎 Fonte (${normalized.sources.length})` : '📎 Fonte';
+                const askQuestion = buildQuestionForFinding(findingText);
                 return `
                     <li class="finding-item">
                         <div class="finding-row">
                             <div class="finding-text">${escapeHtml(findingText)}</div>
                             <div class="finding-actions">
+                                <button type="button"
+                                        class="btn btn-sm btn-secondary ask-assistant-btn"
+                                        title="Chiedi all'assistente su questa segnalazione"
+                                        data-question="${escapeHtml(askQuestion)}">
+                                    💬 Chat
+                                </button>
                                 <button type="button"
                                         class="btn btn-sm btn-secondary source-btn"
                                         title="Mostra fonte normativa"
@@ -954,4 +1336,10 @@ function renderFindingList(findings, groupId, emptyMessage = 'Nessuna segnalazio
             }).join('')}
         </ul>
     `;
+}
+
+function buildQuestionForFinding(findingText) {
+    const text = String(findingText || '').trim();
+    if (!text) return 'Puoi spiegarmi meglio questa segnalazione e come risolverla?';
+    return `Puoi spiegarmi meglio questa segnalazione e come risolverla? "${text}"`;
 }
