@@ -15,6 +15,7 @@
         <div class="nav-links">
             <a href="#documents" class="nav-link active" data-section="documents">📄 Documenti</a>
             <a href="#machines" class="nav-link" data-section="machines">🔧 Macchinari</a>
+            <a href="#chatbot" class="nav-link" data-section="chatbot">💬 Chatbot</a>
             <a href="#assessments" class="nav-link" data-section="assessments">📊 Assessment</a>
         </div>
         <div class="nav-user">
@@ -166,6 +167,62 @@
 
             <div class="assessments-list" id="assessmentsList">
                 <!-- Populated by JS -->
+            </div>
+        </section>
+
+        <!-- Sezione Chatbot (solo UI) -->
+        <section id="chatbot" class="section">
+            <div class="section-header">
+                <h2>💬 Chatbot</h2>
+                <p>Anteprima dell'interfaccia chat in stile Apple (nessuna implementazione attiva)</p>
+            </div>
+
+            <div class="chatbot-shell" aria-label="Chatbot (UI)">
+                <div class="chatbot-header">
+                    <div class="chatbot-header__title">
+                        <div class="chatbot-avatar" aria-hidden="true">🤖</div>
+                        <div class="chatbot-header__text">
+                            <h3>Assistente</h3>
+                            <div class="chatbot-header__subtitle">Solo UI: la chat non è collegata a nessuna logica.</div>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" disabled aria-disabled="true" title="Funzione non disponibile (solo UI)">
+                        Nuova chat
+                    </button>
+                </div>
+
+                <div class="chatbot-hint" role="note">
+                    Suggerimento: questa sezione è pensata per porre domande su documenti, macchinari e assessment (quando verrà implementata la logica).
+                </div>
+
+                <div class="chatbot-messages" role="log" aria-live="polite" aria-label="Messaggi chat (demo UI)">
+                    <div class="chat-message chat-message--assistant">
+                        <div class="chat-bubble">
+                            Ciao! Questa è la sezione dedicata al chatbot. Qui vedrai una chat semplice e intuitiva in stile Apple.
+                        </div>
+                        <div class="chat-meta">Assistente · demo</div>
+                    </div>
+                    <div class="chat-message chat-message--user">
+                        <div class="chat-bubble">
+                            Posso chiederti informazioni sui documenti caricati?
+                        </div>
+                        <div class="chat-meta">Tu · demo</div>
+                    </div>
+                    <div class="chat-message chat-message--assistant">
+                        <div class="chat-bubble">
+                            Sì, ma al momento questa è solo la UI: la parte di risposta verrà aggiunta successivamente.
+                        </div>
+                        <div class="chat-meta">Assistente · demo</div>
+                    </div>
+                </div>
+
+                <div class="chatbot-composer" aria-label="Compositore messaggi (solo UI)">
+                    <label class="sr-only" for="chatbotInput">Scrivi un messaggio</label>
+                    <textarea id="chatbotInput" class="chat-input" rows="1" placeholder="Scrivi un messaggio…" aria-disabled="true"></textarea>
+                    <button type="button" class="btn btn-primary" disabled aria-disabled="true" title="Invio non disponibile (solo UI)">
+                        Invia
+                    </button>
+                </div>
             </div>
         </section>
     </main>
