@@ -7,14 +7,16 @@ let dropZone, fileInput, uploadProgress, progressFill, uploadStatus;
 let loadingOverlay, assessmentModal, assessmentDetails;
 let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
+let chatbotMessages, chatbotComposer, chatbotInput, chatbotSendBtn, chatbotNewChatBtn, chatbotSubtitle;
 
 // State
 let editingMachineId = null;
 let machinesById = new Map();
 
-// Chat state (UI-only)
+// Chat state
 let currentAssessmentContext = null;
 let assessmentChatThreads = new Map();
+let chatbotThread = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -24,6 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initFileUpload();
     initMachineForm();
     initMachineManualUpload();
+    initChatbot();
     loadDocuments();
     loadMachines();
     loadAssessments();
@@ -49,6 +52,13 @@ function initElements() {
     machineFormTitle = document.getElementById('machineFormTitle');
     machineSubmitBtn = document.getElementById('machineSubmitBtn');
     machineResetBtn = document.getElementById('machineResetBtn');
+
+    chatbotMessages = document.getElementById('chatbotMessages');
+    chatbotComposer = document.getElementById('chatbotComposer');
+    chatbotInput = document.getElementById('chatbotInput');
+    chatbotSendBtn = document.getElementById('chatbotSendBtn');
+    chatbotNewChatBtn = document.getElementById('chatbotNewChatBtn');
+    chatbotSubtitle = document.getElementById('chatbotSubtitle');
 }
 
 function initAssessmentModalUi() {
@@ -250,6 +260,8 @@ async function loadDocuments() {
         const response = await fetch(`${API_BASE}/documents`);
         const documents = await response.json();
 
+        updateChatbotSubtitleFromDocuments(documents);
+
         if (documents.length === 0) {
             documentsTable.innerHTML = `
                 <tr>
@@ -404,6 +416,54 @@ function initMachineForm() {
             setMachineFormMode('create');
         }
     });
+}
+
+// Chatbot (document RAG)
+function initChatbot() {
+    if (!chatbotMessages || !chatbotComposer || !chatbotInput) return;
+
+    ensureChatbotThread();
+    renderChatbotThread();
+
+    chatbotComposer.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitChatbotChat().catch((err) => console.error('Chatbot submit error:', err));
+    });
+
+    chatbotInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatbotComposer.requestSubmit();
+        }
+    });
+
+    chatbotInput.addEventListener('input', () => autoResizeChatInput(chatbotInput));
+
+    if (chatbotNewChatBtn) {
+        chatbotNewChatBtn.addEventListener('click', () => {
+            const hasMessages = Array.isArray(chatbotThread?.messages) && chatbotThread.messages.length > 1;
+            if (hasMessages && !confirm('Vuoi iniziare una nuova chat?')) return;
+            resetChatbotThread();
+            renderChatbotThread();
+            chatbotInput.focus();
+            autoResizeChatInput(chatbotInput);
+        });
+    }
+
+    autoResizeChatInput(chatbotInput);
+}
+
+function updateChatbotSubtitleFromDocuments(documents) {
+    if (!chatbotSubtitle) return;
+
+    const docs = Array.isArray(documents) ? documents : [];
+    if (docs.length === 0) {
+        chatbotSubtitle.textContent = 'Nessun documento caricato: carica PDF nella sezione Documenti.';
+        return;
+    }
+
+    const processed = docs.filter(d => d?.processed).length;
+    chatbotSubtitle.textContent = `Documenti disponibili: ${processed}/${docs.length} processati.`;
 }
 
 function setMachineFormMode(mode, machine) {
@@ -942,6 +1002,170 @@ function createChatMessageId() {
         return crypto.randomUUID();
     }
     return `m_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function ensureChatbotThread() {
+    if (chatbotThread) return chatbotThread;
+
+    chatbotThread = {
+        messages: [{
+            id: createChatMessageId(),
+            role: 'assistant',
+            text: [
+                'Ciao! Posso rispondere usando i documenti PDF che hai caricato nella sezione "Documenti".',
+                'Fammi una domanda e cercherò nei documenti i passaggi rilevanti.'
+            ].join('\n'),
+            ts: Date.now(),
+            sources: []
+        }]
+    };
+
+    return chatbotThread;
+}
+
+function resetChatbotThread() {
+    chatbotThread = null;
+    ensureChatbotThread();
+}
+
+function addChatbotMessage(role, text, options = {}) {
+    ensureChatbotThread();
+    const message = {
+        id: createChatMessageId(),
+        role: role === 'user' ? 'user' : 'assistant',
+        text: text || '',
+        ts: Date.now(),
+        pending: Boolean(options.pending),
+        sources: Array.isArray(options.sources) ? options.sources : []
+    };
+    chatbotThread.messages.push(message);
+    return message.id;
+}
+
+function updateChatbotMessage(messageId, patch) {
+    if (!chatbotThread || !Array.isArray(chatbotThread.messages)) return;
+    const msg = chatbotThread.messages.find(m => m.id === messageId);
+    if (!msg) return;
+    Object.assign(msg, patch);
+}
+
+function buildChatbotHistory(maxMessages = 10) {
+    const messages = Array.isArray(chatbotThread?.messages) ? chatbotThread.messages : [];
+
+    return messages
+        .filter(m => !m?.pending)
+        .filter(m => m?.role === 'user' || m?.role === 'assistant')
+        .filter(m => (m?.text || '').trim().length > 0)
+        .slice(-maxMessages)
+        .map(m => ({ role: m.role, content: m.text }));
+}
+
+function renderChatbotThread() {
+    if (!chatbotMessages) return;
+
+    const thread = ensureChatbotThread();
+    chatbotMessages.innerHTML = renderChatbotMessagesHtml(thread?.messages || []);
+
+    requestAnimationFrame(() => {
+        try {
+            chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+        } catch (_) {
+            // ignore
+        }
+    });
+}
+
+function renderChatbotMessagesHtml(messages) {
+    const items = Array.isArray(messages) ? messages : [];
+    return items.map(renderChatbotMessageHtml).join('');
+}
+
+function renderChatbotMessageSourcesHtml(sources) {
+    const items = Array.isArray(sources) ? sources.filter(Boolean) : [];
+    if (items.length === 0) return '';
+
+    return `
+        <details class="chatbot-sources">
+            <summary>📎 Fonti (${items.length})</summary>
+            <div class="source-panel">
+                ${renderSourcesPanel(items)}
+            </div>
+        </details>
+    `;
+}
+
+function renderChatbotMessageHtml(message) {
+    const role = message?.role === 'user' ? 'user' : 'assistant';
+    const bubbleClass = role === 'user' ? 'chat-message--user' : 'chat-message--assistant';
+    const pending = message?.pending ? ' <span class="chat-pending">•</span>' : '';
+    const text = message?.text || '';
+    const content = escapeHtml(text).replaceAll('\n', '<br>');
+
+    const label = role === 'user' ? 'Tu' : 'Assistente';
+    const time = message?.ts ? new Date(message.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+    const meta = `${label}${time ? ' · ' + time : ''}`;
+
+    const sourcesHtml = role === 'assistant' ? renderChatbotMessageSourcesHtml(message?.sources) : '';
+
+    return `
+        <div class="chat-message ${bubbleClass}">
+            <div class="chat-bubble">${content}${pending}</div>
+            <div class="chat-meta">${escapeHtml(meta)}</div>
+            ${sourcesHtml}
+        </div>
+    `;
+}
+
+async function submitChatbotChat() {
+    if (!chatbotInput) return;
+
+    const text = chatbotInput.value?.trim?.() || '';
+    if (!text) return;
+
+    addChatbotMessage('user', text);
+    chatbotInput.value = '';
+    autoResizeChatInput(chatbotInput);
+
+    const pendingId = addChatbotMessage('assistant', 'Sto cercando nei documenti…', { pending: true });
+    renderChatbotThread();
+
+    if (chatbotSendBtn) chatbotSendBtn.disabled = true;
+    chatbotInput.disabled = true;
+
+    try {
+        const history = buildChatbotHistory(10);
+        const response = await fetch(`${API_BASE}/chatbot/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ question: text, history })
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(payload?.error || 'Errore durante la chat');
+        }
+
+        const answer = (payload?.answer || '').toString().trim();
+        const sources = Array.isArray(payload?.sources) ? payload.sources : [];
+
+        updateChatbotMessage(pendingId, {
+            pending: false,
+            text: answer || 'Risposta non disponibile.',
+            sources
+        });
+    } catch (error) {
+        updateChatbotMessage(pendingId, {
+            pending: false,
+            text: `✗ ${error?.message || 'Errore durante la chat'}`,
+            sources: []
+        });
+    } finally {
+        chatbotInput.disabled = false;
+        chatbotInput.focus();
+        if (chatbotSendBtn) chatbotSendBtn.disabled = false;
+        renderChatbotThread();
+    }
 }
 
 function ensureAssessmentChatThread(assessmentId, macchinarioNome) {
