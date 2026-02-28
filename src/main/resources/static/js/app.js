@@ -1,6 +1,8 @@
 // API Base URL
 const API_BASE = '/api';
 
+const CHATBOT_SYSTEM_PROMPT_STORAGE_KEY = 'chatbot.systemPrompt.v1';
+
 // DOM Elements
 let documentsTable, machinesGrid, assessmentsList;
 let dropZone, fileInput, uploadProgress, progressFill, uploadStatus;
@@ -8,6 +10,7 @@ let loadingOverlay, assessmentModal, assessmentDetails;
 let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
 let chatbotMessages, chatbotComposer, chatbotInput, chatbotSendBtn, chatbotNewChatBtn, chatbotSubtitle;
+let chatbotSystemPrompt, chatbotPromptResetBtn, chatbotPromptStatus;
 
 // State
 let editingMachineId = null;
@@ -17,6 +20,8 @@ let machinesById = new Map();
 let currentAssessmentContext = null;
 let assessmentChatThreads = new Map();
 let chatbotThread = null;
+let chatbotDefaultSystemPrompt = '';
+let chatbotSystemPromptSaveTimer = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -59,6 +64,9 @@ function initElements() {
     chatbotSendBtn = document.getElementById('chatbotSendBtn');
     chatbotNewChatBtn = document.getElementById('chatbotNewChatBtn');
     chatbotSubtitle = document.getElementById('chatbotSubtitle');
+    chatbotSystemPrompt = document.getElementById('chatbotSystemPrompt');
+    chatbotPromptResetBtn = document.getElementById('chatbotPromptResetBtn');
+    chatbotPromptStatus = document.getElementById('chatbotPromptStatus');
 }
 
 function initAssessmentModalUi() {
@@ -422,6 +430,8 @@ function initMachineForm() {
 function initChatbot() {
     if (!chatbotMessages || !chatbotComposer || !chatbotInput) return;
 
+    initChatbotSystemPromptSettings().catch((err) => console.error('Chatbot settings init error:', err));
+
     ensureChatbotThread();
     renderChatbotThread();
 
@@ -451,6 +461,116 @@ function initChatbot() {
     }
 
     autoResizeChatInput(chatbotInput);
+}
+
+async function initChatbotSystemPromptSettings() {
+    if (!chatbotSystemPrompt) return;
+
+    setChatbotPromptStatus('Caricamento…');
+
+    chatbotDefaultSystemPrompt = await fetchChatbotDefaultSystemPrompt();
+
+    const stored = loadChatbotSystemPromptOverride();
+    if (stored) {
+        chatbotSystemPrompt.value = stored;
+        setChatbotPromptStatus('Personalizzato');
+    } else if (chatbotDefaultSystemPrompt) {
+        chatbotSystemPrompt.value = chatbotDefaultSystemPrompt;
+        setChatbotPromptStatus('Predefinito');
+    } else {
+        setChatbotPromptStatus('');
+    }
+
+    chatbotSystemPrompt.addEventListener('input', () => {
+        schedulePersistChatbotSystemPrompt();
+        setChatbotPromptStatus('Salvataggio…');
+    });
+
+    if (chatbotPromptResetBtn) {
+        chatbotPromptResetBtn.addEventListener('click', () => {
+            if (!confirm('Vuoi ripristinare le istruzioni predefinite del chatbot?')) return;
+            clearChatbotSystemPromptOverride();
+            chatbotSystemPrompt.value = chatbotDefaultSystemPrompt || '';
+            setChatbotPromptStatus('Predefinito');
+        });
+    }
+}
+
+async function fetchChatbotDefaultSystemPrompt() {
+    try {
+        const response = await fetch(`${API_BASE}/chatbot/system-prompt`, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            return '';
+        }
+        return (payload?.systemPrompt || '').toString();
+    } catch (error) {
+        console.error('Error loading chatbot system prompt:', error);
+        return '';
+    }
+}
+
+function setChatbotPromptStatus(text) {
+    if (!chatbotPromptStatus) return;
+    chatbotPromptStatus.textContent = (text || '').toString();
+}
+
+function loadChatbotSystemPromptOverride() {
+    try {
+        const value = localStorage.getItem(CHATBOT_SYSTEM_PROMPT_STORAGE_KEY);
+        if (!value) return null;
+        return value.toString();
+    } catch (_) {
+        return null;
+    }
+}
+
+function clearChatbotSystemPromptOverride() {
+    try {
+        localStorage.removeItem(CHATBOT_SYSTEM_PROMPT_STORAGE_KEY);
+    } catch (_) {
+        // ignore
+    }
+}
+
+function schedulePersistChatbotSystemPrompt() {
+    if (chatbotSystemPromptSaveTimer) {
+        clearTimeout(chatbotSystemPromptSaveTimer);
+    }
+    chatbotSystemPromptSaveTimer = setTimeout(() => {
+        persistChatbotSystemPromptNow();
+        chatbotSystemPromptSaveTimer = null;
+    }, 350);
+}
+
+function persistChatbotSystemPromptNow() {
+    if (!chatbotSystemPrompt) return;
+
+    const value = (chatbotSystemPrompt.value || '').toString();
+    const trimmed = value.trim();
+    const defaultTrimmed = (chatbotDefaultSystemPrompt || '').toString().trim();
+
+    if (!trimmed) {
+        clearChatbotSystemPromptOverride();
+        setChatbotPromptStatus(defaultTrimmed ? 'Usa predefinito' : '');
+        return;
+    }
+
+    if (defaultTrimmed && trimmed === defaultTrimmed) {
+        clearChatbotSystemPromptOverride();
+        setChatbotPromptStatus('Predefinito');
+        return;
+    }
+
+    try {
+        localStorage.setItem(CHATBOT_SYSTEM_PROMPT_STORAGE_KEY, value);
+        setChatbotPromptStatus('Salvato');
+    } catch (_) {
+        setChatbotPromptStatus('Non salvato');
+    }
 }
 
 function updateChatbotSubtitleFromDocuments(documents) {
@@ -1122,6 +1242,8 @@ async function submitChatbotChat() {
     const text = chatbotInput.value?.trim?.() || '';
     if (!text) return;
 
+    persistChatbotSystemPromptNow();
+
     addChatbotMessage('user', text);
     chatbotInput.value = '';
     autoResizeChatInput(chatbotInput);
@@ -1134,11 +1256,17 @@ async function submitChatbotChat() {
 
     try {
         const history = buildChatbotHistory(10);
+        const systemPrompt = loadChatbotSystemPromptOverride();
+        const requestBody = { question: text, history };
+        if (systemPrompt && systemPrompt.trim()) {
+            requestBody.systemPrompt = systemPrompt;
+        }
+
         const response = await fetch(`${API_BASE}/chatbot/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ question: text, history })
+            body: JSON.stringify(requestBody)
         });
 
         const payload = await response.json().catch(() => ({}));

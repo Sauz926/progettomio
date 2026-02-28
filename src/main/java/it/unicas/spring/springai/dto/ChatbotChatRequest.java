@@ -4,7 +4,7 @@ import java.util.List;
 
 public record ChatbotChatRequest(
         String question,
-        List<ChatTurn> history
+        List<ChatTurn> history,
+        String systemPrompt
 ) {
 }
-

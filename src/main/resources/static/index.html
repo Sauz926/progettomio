@@ -195,6 +195,20 @@
                     Suggerimento: chiedi riferimenti, definizioni o requisiti presenti nei PDF caricati (es. marcatura CE, requisiti essenziali, procedure).
                 </div>
 
+                <details class="chatbot-settings" id="chatbotSettings">
+                    <summary>⚙️ Impostazioni</summary>
+                    <div class="chatbot-settings__panel">
+                        <label for="chatbotSystemPrompt" class="chatbot-settings__label">Istruzioni base (prompt di sistema)</label>
+                        <textarea id="chatbotSystemPrompt" class="chatbot-settings__textarea" rows="6" maxlength="12000" placeholder="Scrivi qui le regole che guidano il chatbot…"></textarea>
+                        <div class="chatbot-settings__actions">
+                            <span class="chatbot-settings__status" id="chatbotPromptStatus" role="status" aria-live="polite"></span>
+                            <button type="button" class="btn btn-secondary btn-sm" id="chatbotPromptResetBtn">Ripristina</button>
+                        </div>
+                        <p class="chatbot-settings__hint">Esempio: “Rispondi in modo tecnico e dettagliato” oppure “Rispondi in modo semplice e riassuntivo”.</p>
+                        <p class="chatbot-settings__hint">Nota: queste impostazioni vengono salvate in questo browser.</p>
+                    </div>
+                </details>
+
                 <div class="chatbot-messages" id="chatbotMessages" role="log" aria-live="polite" aria-relevant="additions" aria-label="Messaggi chat">
                 </div>
 

@@ -33,6 +33,7 @@ public class ChatbotService {
     private static final int DEFAULT_TOP_K = 8;
     private static final int MAX_HISTORY_MESSAGES = 10;
     private static final int MAX_QUESTION_CHARS = 2_000;
+    private static final int MAX_SYSTEM_PROMPT_CHARS = 12_000;
     private static final int MAX_CHUNK_CHARS = 2_000;
     private static final int MAX_SOURCE_EXCERPT_CHARS = 1_200;
 
@@ -92,6 +93,7 @@ public class ChatbotService {
 
         String context = buildChunksContext(retrievedChunks);
         String history = buildHistorySection(request != null ? request.history() : null);
+        String systemPrompt = normalizeSystemPrompt(request != null ? request.systemPrompt() : null);
 
         String userPrompt = """
                 %s
@@ -104,7 +106,7 @@ public class ChatbotService {
 
         ChatClient chatClient = chatClientBuilder.build();
         String raw = chatClient.prompt()
-                .system(CHAT_SYSTEM_PROMPT)
+                .system(systemPrompt)
                 .user(userPrompt)
                 .call()
                 .content();
@@ -123,6 +125,22 @@ public class ChatbotService {
         }
 
         return new ChatbotChatResponse(answer, sources);
+    }
+
+    public String defaultSystemPrompt() {
+        return CHAT_SYSTEM_PROMPT;
+    }
+
+    private String normalizeSystemPrompt(String systemPrompt) {
+        if (systemPrompt == null || systemPrompt.isBlank()) {
+            return CHAT_SYSTEM_PROMPT;
+        }
+
+        String trimmed = systemPrompt.trim();
+        if (trimmed.length() > MAX_SYSTEM_PROMPT_CHARS) {
+            throw new IllegalArgumentException("Istruzioni chatbot troppo lunghe (max " + MAX_SYSTEM_PROMPT_CHARS + " caratteri)");
+        }
+        return trimmed;
     }
 
     private List<RetrievedChunk> toRetrievedChunks(List<Document> documents) {
@@ -360,4 +378,3 @@ public class ChatbotService {
         return Math.max(0.5, Math.min(0.95, value));
     }
 }
-
