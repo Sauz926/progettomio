@@ -523,11 +523,19 @@ function closeChatbotCsvModal(options = {}) {
 }
 
 function handleChatbotCsvRestartChoice(saveCsv) {
+    const snapshot = saveCsv ? buildChatbotConversationSnapshot() : null;
+
     closeChatbotCsvModal();
     restartChatbotConversationUi();
 
     if (saveCsv) {
-        setChatbotExportStatus('UI pronta: il download CSV sarà collegato alla logica applicativa in una fase successiva.', 'info');
+        const downloaded = downloadChatbotConversationCsv(snapshot);
+        if (downloaded) {
+            const count = snapshot?.messages?.length || 0;
+            setChatbotExportStatus(`CSV scaricato correttamente (${count} messaggi esportati).`, 'info');
+        } else {
+            setChatbotExportStatus('Errore durante il download del CSV. Riprova.', 'muted');
+        }
         return;
     }
 
@@ -572,6 +580,131 @@ function clearChatbotExportStatus() {
 
     chatbotExportStatus.textContent = '';
     chatbotExportStatus.classList.remove('is-visible', 'is-info', 'is-muted');
+}
+
+function buildChatbotConversationSnapshot() {
+    const thread = ensureChatbotThread();
+    const now = Date.now();
+
+    const rawMessages = Array.isArray(thread?.messages) ? thread.messages : [];
+    const messages = rawMessages
+        .filter((msg) => !msg?.pending)
+        .map((msg, index) => {
+            const role = msg?.role === 'user' ? 'user' : 'assistant';
+            const rawTs = Number(msg?.ts);
+            return {
+                role,
+                text: (msg?.text || '').toString(),
+                ts: Number.isFinite(rawTs) ? rawTs : now,
+                originalIndex: index
+            };
+        })
+        .sort((a, b) => (a.ts - b.ts) || (a.originalIndex - b.originalIndex))
+        .map((msg, index) => ({
+            index: index + 1,
+            role: msg.role,
+            text: msg.text,
+            ts: msg.ts
+        }));
+
+    const startedAt = messages[0]?.ts || now;
+    const endedAt = messages[messages.length - 1]?.ts || startedAt;
+
+    return {
+        startedAt,
+        endedAt,
+        exportedAt: now,
+        messages
+    };
+}
+
+function downloadChatbotConversationCsv(snapshot) {
+    try {
+        const data = snapshot || buildChatbotConversationSnapshot();
+        const csv = buildChatbotConversationCsv(data);
+        const filename = buildChatbotConversationCsvFilename(data);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        return true;
+    } catch (error) {
+        console.error('Error downloading chatbot CSV:', error);
+        return false;
+    }
+}
+
+function buildChatbotConversationCsv(snapshot) {
+    const data = snapshot || buildChatbotConversationSnapshot();
+    const start = formatCsvDateTime(data.startedAt);
+    const end = formatCsvDateTime(data.endedAt);
+    const exportedAt = formatCsvDateTime(data.exportedAt);
+
+    const rows = [
+        ['indice', 'ruolo', 'messaggio', 'data_ora_messaggio', 'data_ora_inizio_conversazione', 'data_ora_fine_conversazione', 'data_ora_export_csv']
+    ];
+
+    const messages = Array.isArray(data.messages) ? data.messages : [];
+    if (messages.length === 0) {
+        rows.push(['0', 'Sistema', 'Nessun messaggio disponibile', '', start, end, exportedAt]);
+    } else {
+        messages.forEach((msg) => {
+            rows.push([
+                String(msg.index || ''),
+                msg.role === 'user' ? 'Utente' : 'Chatbot',
+                (msg.text || '').toString(),
+                formatCsvDateTime(msg.ts),
+                start,
+                end,
+                exportedAt
+            ]);
+        });
+    }
+
+    const csvBody = rows
+        .map((row) => row.map(escapeCsvValue).join(','))
+        .join('\r\n');
+
+    return `\uFEFF${csvBody}\r\n`;
+}
+
+function buildChatbotConversationCsvFilename(snapshot) {
+    const data = snapshot || buildChatbotConversationSnapshot();
+    return `chatbot_conversazione_${formatCsvFileStamp(data.startedAt)}.csv`;
+}
+
+function escapeCsvValue(value) {
+    const normalized = (value ?? '')
+        .toString()
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .replaceAll('\n', '\\n');
+    return `"${normalized.replaceAll('"', '""')}"`;
+}
+
+function formatCsvDateTime(value) {
+    const date = new Date(value || Date.now());
+    if (Number.isNaN(date.getTime())) return '';
+
+    return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
+function formatCsvFileStamp(value) {
+    const date = new Date(value || Date.now());
+    if (Number.isNaN(date.getTime())) {
+        return formatCsvFileStamp(Date.now());
+    }
+    return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}_${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
+}
+
+function pad2(number) {
+    return String(number).padStart(2, '0');
 }
 
 async function initChatbotSystemPromptSettings() {
