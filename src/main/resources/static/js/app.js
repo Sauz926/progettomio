@@ -25,6 +25,7 @@ let chatbotDefaultSystemPrompt = '';
 let chatbotSystemPromptSaveTimer = null;
 let chatbotExportStatusTimer = null;
 let chatbotMessageEditingState = null;
+let chatbotRequestInProgress = false;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -549,6 +550,7 @@ function handleChatbotCsvRestartChoice(saveCsv) {
 }
 
 function restartChatbotConversationUi() {
+    setChatbotBusy(false);
     resetChatbotThread();
     chatbotMessageEditingState = null;
     clearChatbotEditStatus();
@@ -608,7 +610,94 @@ function clearChatbotEditStatus() {
     chatbotEditStatus.classList.remove('is-visible', 'is-info', 'is-muted');
 }
 
+function setChatbotBusy(isBusy, options = {}) {
+    chatbotRequestInProgress = Boolean(isBusy);
+
+    if (chatbotRequestInProgress) {
+        if (chatbotSendBtn) chatbotSendBtn.disabled = true;
+        if (chatbotInput) chatbotInput.disabled = true;
+        if (chatbotNewChatBtn) chatbotNewChatBtn.disabled = true;
+    } else {
+        if (chatbotSendBtn) chatbotSendBtn.disabled = false;
+        if (chatbotInput) chatbotInput.disabled = false;
+        if (chatbotNewChatBtn) chatbotNewChatBtn.disabled = false;
+    }
+
+    if (!chatbotRequestInProgress && options.focusInput) {
+        chatbotInput?.focus();
+    }
+}
+
+function normalizeChatbotMessage(message, options = {}) {
+    const forceNotPending = Boolean(options.forceNotPending);
+    const role = message?.role === 'user' ? 'user' : 'assistant';
+    const rawTs = Number(message?.ts);
+    return {
+        id: message?.id || createChatMessageId(),
+        role,
+        text: (message?.text || '').toString(),
+        ts: Number.isFinite(rawTs) ? rawTs : Date.now(),
+        pending: forceNotPending ? false : Boolean(message?.pending),
+        sources: role === 'assistant' && Array.isArray(message?.sources) ? [...message.sources] : []
+    };
+}
+
+function collectChatbotUserTurnsFromIndex(messages, startIndex = 0) {
+    const items = Array.isArray(messages) ? messages : [];
+    const from = Math.max(0, Number(startIndex) || 0);
+    return items
+        .slice(from)
+        .filter((msg) => msg?.role === 'user')
+        .map((msg) => normalizeChatbotMessage(msg, { forceNotPending: true }))
+        .filter((msg) => (msg.text || '').trim().length > 0);
+}
+
+function buildChatbotHistoryFromMessages(messages, maxMessages = 10) {
+    const items = Array.isArray(messages) ? messages : [];
+    return items
+        .filter(m => !m?.pending)
+        .filter(m => m?.role === 'user' || m?.role === 'assistant')
+        .filter(m => (m?.text || '').trim().length > 0)
+        .slice(-maxMessages)
+        .map(m => ({ role: m.role, content: m.text }));
+}
+
+async function requestChatbotAnswer(question, history) {
+    const normalizedQuestion = (question || '').toString().trim();
+    if (!normalizedQuestion) {
+        throw new Error('La domanda è obbligatoria');
+    }
+
+    const systemPrompt = loadChatbotSystemPromptOverride();
+    const requestBody = {
+        question: normalizedQuestion,
+        history: Array.isArray(history) ? history : []
+    };
+    if (systemPrompt && systemPrompt.trim()) {
+        requestBody.systemPrompt = systemPrompt;
+    }
+
+    const response = await fetch(`${API_BASE}/chatbot/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(requestBody)
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(payload?.error || 'Errore durante la chat');
+    }
+
+    return {
+        answer: (payload?.answer || '').toString().trim() || 'Risposta non disponibile.',
+        sources: Array.isArray(payload?.sources) ? payload.sources : []
+    };
+}
+
 function handleChatbotMessageAreaClick(event) {
+    if (chatbotRequestInProgress) return;
+
     const editBtn = event.target.closest?.('.chat-message-edit-btn');
     if (editBtn) {
         const messageId = editBtn.getAttribute('data-message-id') || '';
@@ -626,11 +715,13 @@ function handleChatbotMessageAreaClick(event) {
     const saveBtn = event.target.closest?.('.chat-message-edit-save-btn');
     if (saveBtn) {
         const messageId = saveBtn.getAttribute('data-message-id') || '';
-        applyChatbotMessageEditing(messageId);
+        applyChatbotMessageEditing(messageId).catch((err) => console.error('Chatbot edit regeneration error:', err));
     }
 }
 
 function handleChatbotMessageAreaInput(event) {
+    if (chatbotRequestInProgress) return;
+
     const input = event.target.closest?.('.chat-message-edit-input');
     if (!input) return;
 
@@ -648,6 +739,8 @@ function handleChatbotMessageAreaInput(event) {
 }
 
 function handleChatbotMessageAreaKeydown(event) {
+    if (chatbotRequestInProgress) return;
+
     const input = event.target.closest?.('.chat-message-edit-input');
     if (!input) return;
 
@@ -663,10 +756,11 @@ function handleChatbotMessageAreaKeydown(event) {
 
     event.preventDefault();
     const messageId = input.getAttribute('data-message-id') || '';
-    applyChatbotMessageEditing(messageId);
+    applyChatbotMessageEditing(messageId).catch((err) => console.error('Chatbot edit regeneration error:', err));
 }
 
 function beginChatbotMessageEditing(messageId) {
+    if (chatbotRequestInProgress) return;
     if (!messageId) return;
     const thread = ensureChatbotThread();
     const message = thread?.messages?.find((m) => m?.id === messageId && m?.role === 'user' && !m?.pending);
@@ -689,7 +783,8 @@ function beginChatbotMessageEditing(messageId) {
     });
 }
 
-function applyChatbotMessageEditing(messageId) {
+async function applyChatbotMessageEditing(messageId) {
+    if (chatbotRequestInProgress) return;
     if (!chatbotMessageEditingState || chatbotMessageEditingState.messageId !== messageId) return;
 
     const draft = (chatbotMessageEditingState.draft || '').trim();
@@ -699,18 +794,90 @@ function applyChatbotMessageEditing(messageId) {
     const messageIndex = thread.messages.findIndex((m) => m?.id === messageId && m?.role === 'user');
     if (messageIndex < 0) return;
 
-    updateChatbotMessage(messageId, {
-        text: draft,
-        ts: Date.now()
-    });
-
-    thread.messages.forEach((msg, idx) => {
-        msg.uiNeedsRefresh = idx > messageIndex;
-    });
-
+    persistChatbotSystemPromptNow();
     chatbotMessageEditingState = null;
-    setChatbotEditStatus('Anteprima UI: messaggio aggiornato. La rigenerazione automatica delle risposte verra collegata nel prossimo step.', 'info');
+    setChatbotEditStatus('Rigenerazione automatica in corso…', 'info');
     renderChatbotThread();
+
+    try {
+        await regenerateChatbotConversationFromUserIndex(messageIndex, draft);
+        setChatbotEditStatus('Risposte rigenerate in base al messaggio aggiornato.', 'info');
+    } catch (error) {
+        setChatbotEditStatus(`Rigenerazione non completata: ${error?.message || 'errore sconosciuto'}.`, 'muted');
+        throw error;
+    }
+}
+
+async function regenerateChatbotConversationFromUserIndex(userMessageIndex, editedText) {
+    const thread = ensureChatbotThread();
+    const allMessages = Array.isArray(thread?.messages) ? thread.messages : [];
+    if (!Number.isInteger(userMessageIndex) || userMessageIndex < 0 || userMessageIndex >= allMessages.length) {
+        return;
+    }
+
+    const normalized = allMessages
+        .map((msg) => normalizeChatbotMessage(msg, { forceNotPending: true }));
+
+    const target = normalized[userMessageIndex];
+    if (!target || target.role !== 'user') return;
+    target.text = editedText;
+    target.ts = Date.now();
+
+    const preservedPrefix = normalized.slice(0, userMessageIndex);
+    const turnsToReplay = collectChatbotUserTurnsFromIndex(normalized, userMessageIndex);
+
+    thread.messages = preservedPrefix;
+    setChatbotBusy(true);
+    renderChatbotThread();
+
+    try {
+        for (let i = 0; i < turnsToReplay.length; i++) {
+            const userTurn = turnsToReplay[i];
+            const userMessage = {
+                id: userTurn.id || createChatMessageId(),
+                role: 'user',
+                text: (userTurn.text || '').toString(),
+                ts: Date.now(),
+                pending: false,
+                sources: []
+            };
+            thread.messages.push(userMessage);
+
+            const pendingAssistant = {
+                id: createChatMessageId(),
+                role: 'assistant',
+                text: i === 0
+                    ? 'Rigenero la risposta in base al messaggio aggiornato…'
+                    : 'Aggiorno la conversazione in base al nuovo contesto…',
+                ts: Date.now(),
+                pending: true,
+                sources: []
+            };
+            thread.messages.push(pendingAssistant);
+            renderChatbotThread();
+
+            try {
+                const history = buildChatbotHistoryFromMessages(thread.messages, 10);
+                const result = await requestChatbotAnswer(userMessage.text, history);
+
+                pendingAssistant.pending = false;
+                pendingAssistant.text = result.answer;
+                pendingAssistant.sources = result.sources;
+                pendingAssistant.ts = Date.now();
+            } catch (error) {
+                pendingAssistant.pending = false;
+                pendingAssistant.text = `✗ ${error?.message || 'Errore durante la chat'}`;
+                pendingAssistant.sources = [];
+                pendingAssistant.ts = Date.now();
+                renderChatbotThread();
+                throw error;
+            }
+
+            renderChatbotThread();
+        }
+    } finally {
+        setChatbotBusy(false, { focusInput: true });
+    }
 }
 
 function buildChatbotConversationSnapshot() {
@@ -1546,13 +1713,7 @@ function updateChatbotMessage(messageId, patch) {
 
 function buildChatbotHistory(maxMessages = 10) {
     const messages = Array.isArray(chatbotThread?.messages) ? chatbotThread.messages : [];
-
-    return messages
-        .filter(m => !m?.pending)
-        .filter(m => m?.role === 'user' || m?.role === 'assistant')
-        .filter(m => (m?.text || '').trim().length > 0)
-        .slice(-maxMessages)
-        .map(m => ({ role: m.role, content: m.text }));
+    return buildChatbotHistoryFromMessages(messages, maxMessages);
 }
 
 function renderChatbotThread() {
@@ -1602,8 +1763,7 @@ function renderChatbotMessageHtml(message) {
 
     const isEditing = role === 'user' && chatbotMessageEditingState?.messageId === message?.id;
     const safeMessageId = escapeHtml(message?.id || '');
-    const staleClass = message?.uiNeedsRefresh ? ' chat-message--stale' : '';
-    const staleBadge = message?.uiNeedsRefresh ? '<span class="chat-message-stale-tag">Da rigenerare</span>' : '';
+    const lockAttribute = chatbotRequestInProgress ? ' disabled' : '';
 
     let bodyHtml = `<div class="chat-bubble">${content}${pending}</div>`;
     let actionsHtml = '';
@@ -1612,16 +1772,16 @@ function renderChatbotMessageHtml(message) {
         if (isEditing) {
             const draft = chatbotMessageEditingState?.draft ?? text;
             const draftSafe = escapeHtml(draft);
-            const disableSave = draft.trim().length === 0 ? ' disabled' : '';
+            const disableSave = draft.trim().length === 0 || chatbotRequestInProgress ? ' disabled' : '';
             bodyHtml = `
                 <div class="chat-bubble chat-bubble--editing">
                     <label class="sr-only" for="chatbotEditInput-${safeMessageId}">Modifica messaggio</label>
-                    <textarea id="chatbotEditInput-${safeMessageId}" class="chat-message-edit-input" data-message-id="${safeMessageId}" rows="2">${draftSafe}</textarea>
+                    <textarea id="chatbotEditInput-${safeMessageId}" class="chat-message-edit-input" data-message-id="${safeMessageId}" rows="2"${lockAttribute}>${draftSafe}</textarea>
                 </div>
             `;
             actionsHtml = `
                 <div class="chat-message-actions">
-                    <button type="button" class="chat-message-action-btn chat-message-edit-cancel-btn" data-message-id="${safeMessageId}">
+                    <button type="button" class="chat-message-action-btn chat-message-edit-cancel-btn" data-message-id="${safeMessageId}"${lockAttribute}>
                         Annulla
                     </button>
                     <button type="button" class="chat-message-action-btn chat-message-action-btn--primary chat-message-edit-save-btn" data-message-id="${safeMessageId}"${disableSave}>
@@ -1632,7 +1792,7 @@ function renderChatbotMessageHtml(message) {
         } else {
             actionsHtml = `
                 <div class="chat-message-actions">
-                    <button type="button" class="chat-message-action-btn chat-message-edit-btn" data-message-id="${safeMessageId}" aria-label="Modifica messaggio inviato" title="Modifica messaggio">
+                    <button type="button" class="chat-message-action-btn chat-message-edit-btn" data-message-id="${safeMessageId}" aria-label="Modifica messaggio inviato" title="Modifica messaggio"${lockAttribute}>
                         ✏️ Modifica
                     </button>
                 </div>
@@ -1643,11 +1803,10 @@ function renderChatbotMessageHtml(message) {
     const sourcesHtml = role === 'assistant' ? renderChatbotMessageSourcesHtml(message?.sources) : '';
 
     return `
-        <div class="chat-message ${bubbleClass}${staleClass}">
+        <div class="chat-message ${bubbleClass}">
             ${bodyHtml}
             <div class="chat-meta">${escapeHtml(meta)}</div>
             ${actionsHtml}
-            ${staleBadge}
             ${sourcesHtml}
         </div>
     `;
@@ -1655,11 +1814,14 @@ function renderChatbotMessageHtml(message) {
 
 async function submitChatbotChat() {
     if (!chatbotInput) return;
+    if (chatbotRequestInProgress) return;
 
     const text = chatbotInput.value?.trim?.() || '';
     if (!text) return;
 
     persistChatbotSystemPromptNow();
+    clearChatbotEditStatus();
+    chatbotMessageEditingState = null;
 
     addChatbotMessage('user', text);
     chatbotInput.value = '';
@@ -1668,36 +1830,17 @@ async function submitChatbotChat() {
     const pendingId = addChatbotMessage('assistant', 'Sto cercando nei documenti…', { pending: true });
     renderChatbotThread();
 
-    if (chatbotSendBtn) chatbotSendBtn.disabled = true;
-    chatbotInput.disabled = true;
+    setChatbotBusy(true);
+    renderChatbotThread();
 
     try {
         const history = buildChatbotHistory(10);
-        const systemPrompt = loadChatbotSystemPromptOverride();
-        const requestBody = { question: text, history };
-        if (systemPrompt && systemPrompt.trim()) {
-            requestBody.systemPrompt = systemPrompt;
-        }
-
-        const response = await fetch(`${API_BASE}/chatbot/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify(requestBody)
-        });
-
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(payload?.error || 'Errore durante la chat');
-        }
-
-        const answer = (payload?.answer || '').toString().trim();
-        const sources = Array.isArray(payload?.sources) ? payload.sources : [];
+        const result = await requestChatbotAnswer(text, history);
 
         updateChatbotMessage(pendingId, {
             pending: false,
-            text: answer || 'Risposta non disponibile.',
-            sources
+            text: result.answer,
+            sources: result.sources
         });
     } catch (error) {
         updateChatbotMessage(pendingId, {
@@ -1706,9 +1849,7 @@ async function submitChatbotChat() {
             sources: []
         });
     } finally {
-        chatbotInput.disabled = false;
-        chatbotInput.focus();
-        if (chatbotSendBtn) chatbotSendBtn.disabled = false;
+        setChatbotBusy(false, { focusInput: true });
         renderChatbotThread();
     }
 }
