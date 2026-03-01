@@ -11,7 +11,7 @@ let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
 let chatbotMessages, chatbotComposer, chatbotInput, chatbotSendBtn, chatbotNewChatBtn, chatbotSubtitle;
 let chatbotSystemPrompt, chatbotPromptResetBtn, chatbotPromptStatus;
-let chatbotCsvModal, chatbotCsvModalCloseBtn, chatbotCsvYesBtn, chatbotCsvNoBtn, chatbotCsvCancelBtn, chatbotExportStatus;
+let chatbotCsvModal, chatbotCsvModalCloseBtn, chatbotCsvYesBtn, chatbotCsvNoBtn, chatbotCsvCancelBtn, chatbotExportStatus, chatbotEditStatus;
 
 // State
 let editingMachineId = null;
@@ -24,6 +24,7 @@ let chatbotThread = null;
 let chatbotDefaultSystemPrompt = '';
 let chatbotSystemPromptSaveTimer = null;
 let chatbotExportStatusTimer = null;
+let chatbotMessageEditingState = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -76,6 +77,7 @@ function initElements() {
     chatbotCsvNoBtn = document.getElementById('chatbotCsvNoBtn');
     chatbotCsvCancelBtn = document.getElementById('chatbotCsvCancelBtn');
     chatbotExportStatus = document.getElementById('chatbotExportStatus');
+    chatbotEditStatus = document.getElementById('chatbotEditStatus');
 }
 
 function initAssessmentModalUi() {
@@ -481,6 +483,10 @@ function initChatbot() {
         submitChatbotChat().catch((err) => console.error('Chatbot submit error:', err));
     });
 
+    chatbotMessages.addEventListener('click', handleChatbotMessageAreaClick);
+    chatbotMessages.addEventListener('input', handleChatbotMessageAreaInput);
+    chatbotMessages.addEventListener('keydown', handleChatbotMessageAreaKeydown);
+
     chatbotInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -544,6 +550,8 @@ function handleChatbotCsvRestartChoice(saveCsv) {
 
 function restartChatbotConversationUi() {
     resetChatbotThread();
+    chatbotMessageEditingState = null;
+    clearChatbotEditStatus();
     renderChatbotThread();
     chatbotInput?.focus();
     autoResizeChatInput(chatbotInput);
@@ -580,6 +588,129 @@ function clearChatbotExportStatus() {
 
     chatbotExportStatus.textContent = '';
     chatbotExportStatus.classList.remove('is-visible', 'is-info', 'is-muted');
+}
+
+function setChatbotEditStatus(message, tone = 'info') {
+    if (!chatbotEditStatus) return;
+    const text = (message || '').toString().trim();
+    chatbotEditStatus.textContent = text;
+    chatbotEditStatus.classList.remove('is-visible', 'is-info', 'is-muted');
+
+    if (!text) return;
+
+    chatbotEditStatus.classList.add('is-visible');
+    chatbotEditStatus.classList.add(tone === 'muted' ? 'is-muted' : 'is-info');
+}
+
+function clearChatbotEditStatus() {
+    if (!chatbotEditStatus) return;
+    chatbotEditStatus.textContent = '';
+    chatbotEditStatus.classList.remove('is-visible', 'is-info', 'is-muted');
+}
+
+function handleChatbotMessageAreaClick(event) {
+    const editBtn = event.target.closest?.('.chat-message-edit-btn');
+    if (editBtn) {
+        const messageId = editBtn.getAttribute('data-message-id') || '';
+        beginChatbotMessageEditing(messageId);
+        return;
+    }
+
+    const cancelBtn = event.target.closest?.('.chat-message-edit-cancel-btn');
+    if (cancelBtn) {
+        chatbotMessageEditingState = null;
+        renderChatbotThread();
+        return;
+    }
+
+    const saveBtn = event.target.closest?.('.chat-message-edit-save-btn');
+    if (saveBtn) {
+        const messageId = saveBtn.getAttribute('data-message-id') || '';
+        applyChatbotMessageEditing(messageId);
+    }
+}
+
+function handleChatbotMessageAreaInput(event) {
+    const input = event.target.closest?.('.chat-message-edit-input');
+    if (!input) return;
+
+    const messageId = input.getAttribute('data-message-id') || '';
+    if (!chatbotMessageEditingState || chatbotMessageEditingState.messageId !== messageId) return;
+
+    chatbotMessageEditingState.draft = input.value || '';
+    autoResizeChatInput(input);
+
+    const messageEl = input.closest('.chat-message');
+    const saveBtn = messageEl?.querySelector('.chat-message-edit-save-btn');
+    if (saveBtn) {
+        saveBtn.disabled = !(chatbotMessageEditingState.draft || '').trim();
+    }
+}
+
+function handleChatbotMessageAreaKeydown(event) {
+    const input = event.target.closest?.('.chat-message-edit-input');
+    if (!input) return;
+
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        chatbotMessageEditingState = null;
+        renderChatbotThread();
+        return;
+    }
+
+    if (event.key !== 'Enter') return;
+    if (!(event.ctrlKey || event.metaKey)) return;
+
+    event.preventDefault();
+    const messageId = input.getAttribute('data-message-id') || '';
+    applyChatbotMessageEditing(messageId);
+}
+
+function beginChatbotMessageEditing(messageId) {
+    if (!messageId) return;
+    const thread = ensureChatbotThread();
+    const message = thread?.messages?.find((m) => m?.id === messageId && m?.role === 'user' && !m?.pending);
+    if (!message) return;
+
+    chatbotMessageEditingState = {
+        messageId,
+        draft: (message.text || '').toString()
+    };
+
+    renderChatbotThread();
+
+    requestAnimationFrame(() => {
+        const input = chatbotMessages?.querySelector?.('.chat-message-edit-input');
+        if (!input) return;
+        input.focus();
+        const length = input.value?.length || 0;
+        input.setSelectionRange(length, length);
+        autoResizeChatInput(input);
+    });
+}
+
+function applyChatbotMessageEditing(messageId) {
+    if (!chatbotMessageEditingState || chatbotMessageEditingState.messageId !== messageId) return;
+
+    const draft = (chatbotMessageEditingState.draft || '').trim();
+    if (!draft) return;
+
+    const thread = ensureChatbotThread();
+    const messageIndex = thread.messages.findIndex((m) => m?.id === messageId && m?.role === 'user');
+    if (messageIndex < 0) return;
+
+    updateChatbotMessage(messageId, {
+        text: draft,
+        ts: Date.now()
+    });
+
+    thread.messages.forEach((msg, idx) => {
+        msg.uiNeedsRefresh = idx > messageIndex;
+    });
+
+    chatbotMessageEditingState = null;
+    setChatbotEditStatus('Anteprima UI: messaggio aggiornato. La rigenerazione automatica delle risposte verra collegata nel prossimo step.', 'info');
+    renderChatbotThread();
 }
 
 function buildChatbotConversationSnapshot() {
@@ -1469,12 +1600,54 @@ function renderChatbotMessageHtml(message) {
     const time = message?.ts ? new Date(message.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
     const meta = `${label}${time ? ' · ' + time : ''}`;
 
+    const isEditing = role === 'user' && chatbotMessageEditingState?.messageId === message?.id;
+    const safeMessageId = escapeHtml(message?.id || '');
+    const staleClass = message?.uiNeedsRefresh ? ' chat-message--stale' : '';
+    const staleBadge = message?.uiNeedsRefresh ? '<span class="chat-message-stale-tag">Da rigenerare</span>' : '';
+
+    let bodyHtml = `<div class="chat-bubble">${content}${pending}</div>`;
+    let actionsHtml = '';
+
+    if (role === 'user' && !message?.pending) {
+        if (isEditing) {
+            const draft = chatbotMessageEditingState?.draft ?? text;
+            const draftSafe = escapeHtml(draft);
+            const disableSave = draft.trim().length === 0 ? ' disabled' : '';
+            bodyHtml = `
+                <div class="chat-bubble chat-bubble--editing">
+                    <label class="sr-only" for="chatbotEditInput-${safeMessageId}">Modifica messaggio</label>
+                    <textarea id="chatbotEditInput-${safeMessageId}" class="chat-message-edit-input" data-message-id="${safeMessageId}" rows="2">${draftSafe}</textarea>
+                </div>
+            `;
+            actionsHtml = `
+                <div class="chat-message-actions">
+                    <button type="button" class="chat-message-action-btn chat-message-edit-cancel-btn" data-message-id="${safeMessageId}">
+                        Annulla
+                    </button>
+                    <button type="button" class="chat-message-action-btn chat-message-action-btn--primary chat-message-edit-save-btn" data-message-id="${safeMessageId}"${disableSave}>
+                        Aggiorna e rigenera
+                    </button>
+                </div>
+            `;
+        } else {
+            actionsHtml = `
+                <div class="chat-message-actions">
+                    <button type="button" class="chat-message-action-btn chat-message-edit-btn" data-message-id="${safeMessageId}" aria-label="Modifica messaggio inviato" title="Modifica messaggio">
+                        ✏️ Modifica
+                    </button>
+                </div>
+            `;
+        }
+    }
+
     const sourcesHtml = role === 'assistant' ? renderChatbotMessageSourcesHtml(message?.sources) : '';
 
     return `
-        <div class="chat-message ${bubbleClass}">
-            <div class="chat-bubble">${content}${pending}</div>
+        <div class="chat-message ${bubbleClass}${staleClass}">
+            ${bodyHtml}
             <div class="chat-meta">${escapeHtml(meta)}</div>
+            ${actionsHtml}
+            ${staleBadge}
             ${sourcesHtml}
         </div>
     `;
