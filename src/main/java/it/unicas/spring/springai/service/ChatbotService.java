@@ -36,6 +36,10 @@ public class ChatbotService {
     private static final int MAX_SYSTEM_PROMPT_CHARS = 12_000;
     private static final int MAX_CHUNK_CHARS = 2_000;
     private static final int MAX_SOURCE_EXCERPT_CHARS = 1_200;
+    private static final String NO_INFO_MESSAGE = "Non ho trovato questa informazione.";
+    private static final String NO_INFO_WITH_HINT = NO_INFO_MESSAGE + " " +
+            "Prova a riformulare la domanda oppure carica documenti più pertinenti " +
+            "(es. regolamento/standard/manuali specifici).";
 
     private static final String CHAT_SYSTEM_PROMPT = """
             Sei un assistente virtuale che risponde a domande sui documenti PDF caricati dall'utente (normative e documentazione tecnica).
@@ -85,8 +89,7 @@ public class ChatbotService {
 
         if (retrievedChunks.isEmpty()) {
             return new ChatbotChatResponse(
-                    "Non ho trovato informazioni rilevanti nei documenti caricati. " +
-                            "Prova a riformulare la domanda oppure carica documenti più pertinenti (es. regolamento/standard/manuali specifici).",
+                    NO_INFO_WITH_HINT,
                     List.of()
             );
         }
@@ -116,7 +119,7 @@ public class ChatbotService {
 
         String answer = parsed.answer() != null ? parsed.answer().trim() : "";
         if (answer.isBlank()) {
-            answer = normalizedRaw.isBlank() ? "Risposta non disponibile." : normalizedRaw;
+            answer = normalizedRaw.isBlank() ? NO_INFO_MESSAGE : normalizedRaw;
         }
 
         List<ChatbotSource> sources = buildSources(parsed.chunkIds(), retrievedChunks);
