@@ -186,14 +186,16 @@
                             <div class="chatbot-header__subtitle" id="chatbotSubtitle">Risponde usando i documenti caricati (RAG).</div>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" id="chatbotNewChatBtn" title="Nuova chat">
-                        Nuova chat
+                    <button type="button" class="btn btn-secondary btn-sm" id="chatbotNewChatBtn" title="Riavvia chat">
+                        Riavvia chat
                     </button>
                 </div>
 
                 <div class="chatbot-hint" role="note">
                     Suggerimento: chiedi riferimenti, definizioni o requisiti presenti nei PDF caricati (es. marcatura CE, requisiti essenziali, procedure).
                 </div>
+
+                <div class="chatbot-export-status" id="chatbotExportStatus" role="status" aria-live="polite"></div>
 
                 <details class="chatbot-settings" id="chatbotSettings">
                     <summary>⚙️ Impostazioni</summary>
@@ -232,6 +234,35 @@
             </div>
             <div class="modal-body" id="assessmentDetails">
                 <!-- Populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Chatbot CSV (UI only) -->
+    <div class="modal" id="chatbotCsvModal" aria-hidden="true">
+        <div class="modal-content chatbot-csv-modal-content" role="dialog" aria-modal="true" aria-labelledby="chatbotCsvModalTitle">
+            <div class="modal-header">
+                <h2 id="chatbotCsvModalTitle">Salvare la chat in CSV prima del riavvio?</h2>
+                <button type="button" class="modal-close" id="chatbotCsvModalCloseBtn" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="modal-body chatbot-csv-modal-body">
+                <p>Stai per riavviare la conversazione del chatbot.</p>
+                <p>Vuoi salvare prima la chat in formato CSV?</p>
+
+                <div class="chatbot-csv-preview">
+                    <h3>Anteprima contenuto file CSV</h3>
+                    <ul>
+                        <li>Messaggi utente e risposte assistente in ordine cronologico</li>
+                        <li>Ruolo del messaggio (Utente/Chatbot) chiaramente distinto</li>
+                        <li>Data e ora della conversazione</li>
+                    </ul>
+                </div>
+
+                <div class="chatbot-csv-actions">
+                    <button type="button" class="btn btn-primary" id="chatbotCsvYesBtn">Sì, salva CSV e riavvia</button>
+                    <button type="button" class="btn btn-secondary" id="chatbotCsvNoBtn">No, riavvia senza salvare</button>
+                    <button type="button" class="btn btn-secondary" id="chatbotCsvCancelBtn">Annulla</button>
+                </div>
             </div>
         </div>
     </div>

@@ -11,6 +11,7 @@ let machineManualUploadBtn, machineManualFileInput, machineManualStatus;
 let machineForm, machineFormTitle, machineSubmitBtn, machineResetBtn;
 let chatbotMessages, chatbotComposer, chatbotInput, chatbotSendBtn, chatbotNewChatBtn, chatbotSubtitle;
 let chatbotSystemPrompt, chatbotPromptResetBtn, chatbotPromptStatus;
+let chatbotCsvModal, chatbotCsvModalCloseBtn, chatbotCsvYesBtn, chatbotCsvNoBtn, chatbotCsvCancelBtn, chatbotExportStatus;
 
 // State
 let editingMachineId = null;
@@ -22,6 +23,7 @@ let assessmentChatThreads = new Map();
 let chatbotThread = null;
 let chatbotDefaultSystemPrompt = '';
 let chatbotSystemPromptSaveTimer = null;
+let chatbotExportStatusTimer = null;
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
@@ -31,6 +33,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initFileUpload();
     initMachineForm();
     initMachineManualUpload();
+    initChatbotCsvModalUi();
     initChatbot();
     loadDocuments();
     loadMachines();
@@ -67,6 +70,12 @@ function initElements() {
     chatbotSystemPrompt = document.getElementById('chatbotSystemPrompt');
     chatbotPromptResetBtn = document.getElementById('chatbotPromptResetBtn');
     chatbotPromptStatus = document.getElementById('chatbotPromptStatus');
+    chatbotCsvModal = document.getElementById('chatbotCsvModal');
+    chatbotCsvModalCloseBtn = document.getElementById('chatbotCsvModalCloseBtn');
+    chatbotCsvYesBtn = document.getElementById('chatbotCsvYesBtn');
+    chatbotCsvNoBtn = document.getElementById('chatbotCsvNoBtn');
+    chatbotCsvCancelBtn = document.getElementById('chatbotCsvCancelBtn');
+    chatbotExportStatus = document.getElementById('chatbotExportStatus');
 }
 
 function initAssessmentModalUi() {
@@ -426,6 +435,38 @@ function initMachineForm() {
     });
 }
 
+function initChatbotCsvModalUi() {
+    if (!chatbotCsvModal) return;
+
+    chatbotCsvModal.addEventListener('click', (e) => {
+        if (e.target === chatbotCsvModal) {
+            closeChatbotCsvModal({ restoreFocus: true });
+        }
+    });
+
+    chatbotCsvModalCloseBtn?.addEventListener('click', () => {
+        closeChatbotCsvModal({ restoreFocus: true });
+    });
+
+    chatbotCsvCancelBtn?.addEventListener('click', () => {
+        closeChatbotCsvModal({ restoreFocus: true });
+    });
+
+    chatbotCsvYesBtn?.addEventListener('click', () => {
+        handleChatbotCsvRestartChoice(true);
+    });
+
+    chatbotCsvNoBtn?.addEventListener('click', () => {
+        handleChatbotCsvRestartChoice(false);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (!chatbotCsvModal.classList.contains('active')) return;
+        closeChatbotCsvModal({ restoreFocus: true });
+    });
+}
+
 // Chatbot (document RAG)
 function initChatbot() {
     if (!chatbotMessages || !chatbotComposer || !chatbotInput) return;
@@ -451,16 +492,86 @@ function initChatbot() {
 
     if (chatbotNewChatBtn) {
         chatbotNewChatBtn.addEventListener('click', () => {
-            const hasMessages = Array.isArray(chatbotThread?.messages) && chatbotThread.messages.length > 1;
-            if (hasMessages && !confirm('Vuoi iniziare una nuova chat?')) return;
-            resetChatbotThread();
-            renderChatbotThread();
-            chatbotInput.focus();
-            autoResizeChatInput(chatbotInput);
+            openChatbotCsvModal();
         });
     }
 
     autoResizeChatInput(chatbotInput);
+}
+
+function openChatbotCsvModal() {
+    if (!chatbotCsvModal) {
+        restartChatbotConversationUi();
+        return;
+    }
+
+    chatbotCsvModal.classList.add('active');
+    chatbotCsvModal.setAttribute('aria-hidden', 'false');
+    chatbotCsvYesBtn?.focus();
+}
+
+function closeChatbotCsvModal(options = {}) {
+    if (!chatbotCsvModal) return;
+
+    const restoreFocus = Boolean(options.restoreFocus);
+    chatbotCsvModal.classList.remove('active');
+    chatbotCsvModal.setAttribute('aria-hidden', 'true');
+
+    if (restoreFocus) {
+        chatbotNewChatBtn?.focus();
+    }
+}
+
+function handleChatbotCsvRestartChoice(saveCsv) {
+    closeChatbotCsvModal();
+    restartChatbotConversationUi();
+
+    if (saveCsv) {
+        setChatbotExportStatus('UI pronta: il download CSV sarà collegato alla logica applicativa in una fase successiva.', 'info');
+        return;
+    }
+
+    clearChatbotExportStatus();
+}
+
+function restartChatbotConversationUi() {
+    resetChatbotThread();
+    renderChatbotThread();
+    chatbotInput?.focus();
+    autoResizeChatInput(chatbotInput);
+}
+
+function setChatbotExportStatus(message, tone = 'info') {
+    if (!chatbotExportStatus) return;
+
+    if (chatbotExportStatusTimer) {
+        clearTimeout(chatbotExportStatusTimer);
+        chatbotExportStatusTimer = null;
+    }
+
+    const text = (message || '').toString().trim();
+    chatbotExportStatus.textContent = text;
+    chatbotExportStatus.classList.remove('is-visible', 'is-info', 'is-muted');
+
+    if (!text) return;
+
+    chatbotExportStatus.classList.add('is-visible');
+    chatbotExportStatus.classList.add(tone === 'muted' ? 'is-muted' : 'is-info');
+    chatbotExportStatusTimer = setTimeout(() => {
+        clearChatbotExportStatus();
+    }, 7000);
+}
+
+function clearChatbotExportStatus() {
+    if (!chatbotExportStatus) return;
+
+    if (chatbotExportStatusTimer) {
+        clearTimeout(chatbotExportStatusTimer);
+        chatbotExportStatusTimer = null;
+    }
+
+    chatbotExportStatus.textContent = '';
+    chatbotExportStatus.classList.remove('is-visible', 'is-info', 'is-muted');
 }
 
 async function initChatbotSystemPromptSettings() {

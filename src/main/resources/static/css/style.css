@@ -846,6 +846,51 @@ tr:hover {
     flex-direction: column;
 }
 
+.chatbot-csv-modal-content {
+    max-width: 680px;
+    height: auto;
+}
+
+.chatbot-csv-modal-body {
+    gap: 0.85rem;
+}
+
+.chatbot-csv-modal-body p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.chatbot-csv-preview {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-color);
+    padding: 0.9rem 1rem;
+}
+
+.chatbot-csv-preview h3 {
+    margin: 0 0 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.chatbot-csv-preview ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.chatbot-csv-preview li + li {
+    margin-top: 0.35rem;
+}
+
+.chatbot-csv-actions {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    padding-top: 0.5rem;
+}
+
 /* Screen reader only */
 .sr-only {
     position: absolute;
@@ -1142,6 +1187,31 @@ tr:hover {
     font-size: 0.9rem;
 }
 
+.chatbot-export-status {
+    display: none;
+    margin: 0.65rem 1rem 0;
+    padding: 0.65rem 0.8rem;
+    border-radius: 12px;
+    font-size: 0.84rem;
+    border: 1px solid transparent;
+}
+
+.chatbot-export-status.is-visible {
+    display: block;
+}
+
+.chatbot-export-status.is-info {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: rgba(37, 99, 235, 0.25);
+}
+
+.chatbot-export-status.is-muted {
+    background: #f8fafc;
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
 .chatbot-settings {
     padding: 0.65rem 1rem;
     background: rgba(245, 245, 247, 0.6);
@@ -1413,6 +1483,15 @@ tr:hover {
     .finding-actions {
         justify-content: flex-start;
     }
+
+    .chatbot-csv-actions {
+        flex-direction: column;
+    }
+
+    .chatbot-csv-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 900px) {
@@ -1427,6 +1506,12 @@ tr:hover {
     .modal-content {
         height: calc(100vh - 2rem);
         height: calc(100dvh - 2rem);
+    }
+
+    .chatbot-csv-modal-content {
+        height: auto;
+        max-height: calc(100vh - 2rem);
+        max-height: calc(100dvh - 2rem);
     }
 
     .assessment-layout__tabs {
