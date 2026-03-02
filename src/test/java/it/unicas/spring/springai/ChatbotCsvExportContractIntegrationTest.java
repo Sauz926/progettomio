@@ -30,6 +30,12 @@ class ChatbotCsvExportContractIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Verifica che la pagina index esponga gli elementi UI necessari al flusso export CSV e modifica messaggi.
+     * Chiamata dal runner JUnit 5 durante la suite di integrazione frontend.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void pagina_index_espone_controlli_csv_e_feedback_per_modifica_messaggi() throws Exception {
@@ -44,6 +50,12 @@ class ChatbotCsvExportContractIntegrationTest {
                 .andExpect(content().string(containsString("Salvare la chat in CSV prima del riavvio?")));
     }
 
+    /**
+     * Verifica il contratto del JavaScript di export CSV (snapshot, header temporali e download).
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     void javascript_export_csv_prevede_snapshot_header_temporali_e_download_file() throws Exception {
         mockMvc.perform(get("/js/app.js"))
@@ -59,6 +71,12 @@ class ChatbotCsvExportContractIntegrationTest {
                 .andExpect(content().string(containsString("formatCsvDateTime(msg.ts)")));
     }
 
+    /**
+     * Verifica il flusso combinato restart+CSV con reset stato e gestione errori lato JavaScript.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     void javascript_flusso_combinato_restart_csv_resetta_stato_e_gestisce_errori() throws Exception {
         mockMvc.perform(get("/js/app.js"))
@@ -73,6 +91,12 @@ class ChatbotCsvExportContractIntegrationTest {
                 .andExpect(content().string(containsString("clearChatbotEditStatus();")));
     }
 
+    /**
+     * Verifica che i fogli di stile includano regole responsive per modale CSV e editor messaggi.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     void css_prevede_layout_responsive_per_csv_modal_e_modifica_messaggi() throws Exception {
         mockMvc.perform(get("/css/style.css"))

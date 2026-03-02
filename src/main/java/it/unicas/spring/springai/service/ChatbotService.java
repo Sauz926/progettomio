@@ -73,6 +73,13 @@ public class ChatbotService {
     ) {
     }
 
+    /**
+     * Gestisce un turno di chat completo con retrieval, prompt building, chiamata LLM e mapping delle fonti.
+     * Chiamata dal controller chatbot nell'endpoint {@code POST /api/chatbot/chat}.
+     *
+     * @param request richiesta utente con domanda, storia e prompt opzionale
+     * @return risposta finale + fonti usate
+     */
     public ChatbotChatResponse chat(ChatbotChatRequest request) {
         String question = request != null ? request.question() : null;
         if (question == null || question.isBlank()) {
@@ -130,10 +137,23 @@ public class ChatbotService {
         return new ChatbotChatResponse(answer, sources);
     }
 
+    /**
+     * Restituisce il prompt di sistema standard del chatbot.
+     * Chiamata dal controller chatbot nell'endpoint {@code GET /api/chatbot/system-prompt}.
+     *
+     * @return prompt di default
+     */
     public String defaultSystemPrompt() {
         return CHAT_SYSTEM_PROMPT;
     }
 
+    /**
+     * Valida e normalizza il prompt di sistema opzionale inviato dal client.
+     * Chiamata internamente da {@link #chat(ChatbotChatRequest)}.
+     *
+     * @param systemPrompt prompt custom richiesto dal client
+     * @return prompt valido (custom o default)
+     */
     private String normalizeSystemPrompt(String systemPrompt) {
         if (systemPrompt == null || systemPrompt.isBlank()) {
             return CHAT_SYSTEM_PROMPT;
@@ -146,6 +166,13 @@ public class ChatbotService {
         return trimmed;
     }
 
+    /**
+     * Converte i documenti RAG in chunk strutturati con metadati uniformi.
+     * Chiamata da {@link #chat(ChatbotChatRequest)} subito dopo la retrieval.
+     *
+     * @param documents chunk grezzi del vector store
+     * @return chunk interni con id, pagina, confidenza e testo
+     */
     private List<RetrievedChunk> toRetrievedChunks(List<Document> documents) {
         if (documents == null || documents.isEmpty()) return List.of();
 
@@ -181,6 +208,13 @@ public class ChatbotService {
         return chunks;
     }
 
+    /**
+     * Costruisce la sezione di prompt che contiene i chunk recuperati.
+     * Chiamata da {@link #chat(ChatbotChatRequest)}.
+     *
+     * @param chunks chunk recuperati e normalizzati
+     * @return sezione testuale da allegare al prompt utente
+     */
     private String buildChunksContext(List<RetrievedChunk> chunks) {
         StringBuilder sb = new StringBuilder();
         sb.append("=== CHUNKS RECUPERATI (RAG) ===\n");
@@ -202,6 +236,13 @@ public class ChatbotService {
         return sb.toString();
     }
 
+    /**
+     * Normalizza e limita la cronologia chat da passare al modello.
+     * Chiamata da {@link #chat(ChatbotChatRequest)}.
+     *
+     * @param history storia conversazione lato client
+     * @return sezione "storia chat" pronta per il prompt
+     */
     private String buildHistorySection(List<ChatTurn> history) {
         if (history == null || history.isEmpty()) {
             return "=== STORIA CHAT ===\nNessuna.\n";
@@ -228,6 +269,13 @@ public class ChatbotService {
         return sb.toString();
     }
 
+    /**
+     * Interpreta la risposta LLM (preferibilmente JSON) in una struttura tipizzata.
+     * Chiamata da {@link #chat(ChatbotChatRequest)}.
+     *
+     * @param raw output grezzo del modello
+     * @return risposta normalizzata con testo e id chunk citati
+     */
     private ParsedAnswer parseAnswer(String raw) {
         if (raw == null || raw.isBlank()) {
             return new ParsedAnswer("", List.of());
@@ -249,6 +297,13 @@ public class ChatbotService {
         }
     }
 
+    /**
+     * Estrae il primo JSON object utile dalla risposta del modello.
+     * Chiamata da {@link #parseAnswer(String)}.
+     *
+     * @param text output grezzo LLM
+     * @return JSON object come stringa o {@code {}}
+     */
     private String extractJsonObject(String text) {
         if (text == null) {
             return "{}";
@@ -276,6 +331,13 @@ public class ChatbotService {
         return trimmed.substring(start, end + 1);
     }
 
+    /**
+     * Normalizza la lista di chunkIds restituiti dal modello.
+     * Chiamata da {@link #parseAnswer(String)}.
+     *
+     * @param node nodo JSON associato a {@code chunkIds}
+     * @return lista ordinata di ID univoci
+     */
     private List<Integer> parseChunkIds(JsonNode node) {
         if (node == null || !node.isArray()) return List.of();
 
@@ -304,6 +366,14 @@ public class ChatbotService {
         return List.copyOf(ids);
     }
 
+    /**
+     * Traduce gli id citati dal modello nelle fonti complete da restituire al client.
+     * Chiamata da {@link #chat(ChatbotChatRequest)} dopo il parsing della risposta.
+     *
+     * @param chunkIds id chunk citati dal modello
+     * @param retrievedChunks chunk effettivamente recuperati
+     * @return fonti correlate ai chunk richiesti
+     */
     private List<ChatbotSource> buildSources(List<Integer> chunkIds, List<RetrievedChunk> retrievedChunks) {
         if (chunkIds == null || chunkIds.isEmpty() || retrievedChunks == null || retrievedChunks.isEmpty()) {
             return List.of();
@@ -330,6 +400,13 @@ public class ChatbotService {
         return sources;
     }
 
+    /**
+     * Costruisce un fallback di fonti quando il modello non restituisce chunkIds validi.
+     * Chiamata da {@link #chat(ChatbotChatRequest)}.
+     *
+     * @param retrievedChunks chunk disponibili
+     * @return prime fonti più pertinenti
+     */
     private List<ChatbotSource> buildDefaultSources(List<RetrievedChunk> retrievedChunks) {
         if (retrievedChunks == null || retrievedChunks.isEmpty()) {
             return List.of();
@@ -350,12 +427,28 @@ public class ChatbotService {
         return sources;
     }
 
+    /**
+     * Costruisce il riferimento leggibile di una fonte (file + pagina).
+     * Chiamata da {@link #buildSources(List, List)} e {@link #buildDefaultSources(List)}.
+     *
+     * @param fileName nome documento
+     * @param page numero pagina
+     * @return riferimento sintetico per UI/API
+     */
     private String buildReference(String fileName, Integer page) {
         String base = (fileName == null || fileName.isBlank()) ? "Documento" : fileName.trim();
         if (page == null) return base;
         return base + ", Pag. " + page;
     }
 
+    /**
+     * Tronca un estratto testuale alla dimensione massima consentita.
+     * Chiamata da {@link #buildSources(List, List)} e {@link #buildDefaultSources(List)}.
+     *
+     * @param text testo sorgente
+     * @param maxChars limite massimo caratteri
+     * @return testo eventualmente troncato
+     */
     private String excerpt(String text, int maxChars) {
         if (text == null) return "";
         String trimmed = text.trim();
@@ -363,6 +456,13 @@ public class ChatbotService {
         return trimmed.substring(0, maxChars) + "…";
     }
 
+    /**
+     * Converte metadati eterogenei in intero quando possibile.
+     * Chiamata da {@link #toRetrievedChunks(List)} per i campi pagina.
+     *
+     * @param value valore metadato grezzo
+     * @return intero opzionale
+     */
     private Optional<Integer> parseInteger(Object value) {
         if (value == null) return Optional.empty();
         if (value instanceof Number number) return Optional.of(number.intValue());
@@ -376,6 +476,13 @@ public class ChatbotService {
         }
     }
 
+    /**
+     * Calcola una confidenza euristica in base al rank quando lo score non è disponibile.
+     * Chiamata da {@link #toRetrievedChunks(List)}.
+     *
+     * @param rankIndex posizione del chunk nei risultati retrieval
+     * @return score normalizzato in range operativo
+     */
     private Double rankBasedConfidence(int rankIndex) {
         double value = 0.9 - (rankIndex * 0.05);
         return Math.max(0.5, Math.min(0.95, value));

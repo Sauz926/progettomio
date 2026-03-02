@@ -57,12 +57,22 @@ class ChatbotGeneralIntegrationTest {
 
     private ChatClient chatClient;
 
+    /**
+     * Prepara il mock ChatClient condiviso per ogni scenario della classe.
+     * Chiamata automaticamente da JUnit 5 prima di ciascun {@code @Test}.
+     */
     @BeforeEach
     void setUp() {
         chatClient = mock(ChatClient.class, Answers.RETURNS_DEEP_STUBS);
         when(chatClientBuilder.build()).thenReturn(chatClient);
     }
 
+    /**
+     * Verifica il caso positivo: risposta chatbot con fonte pertinente estratta dal vector store.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void chatbot_risponde_alle_domande_generiche_con_fonti_pertinenti() throws Exception {
@@ -94,6 +104,12 @@ class ChatbotGeneralIntegrationTest {
                 .andExpect(jsonPath("$.sources[0].chunk").value(containsString("marcatura CE")));
     }
 
+    /**
+     * Verifica il comportamento quando non ci sono chunk rilevanti disponibili.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void chatbot_gestisce_assenza_informazioni_con_messaggio_chiaro() throws Exception {
@@ -111,6 +127,12 @@ class ChatbotGeneralIntegrationTest {
                 .andExpect(jsonPath("$.sources.length()").value(0));
     }
 
+    /**
+     * Verifica la robustezza su conversazioni lunghe e il trimming corretto della history inviata al modello.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void chatbot_regge_conversazioni_prolungate_senza_incoerenze() throws Exception {

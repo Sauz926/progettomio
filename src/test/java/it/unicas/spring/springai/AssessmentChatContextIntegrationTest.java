@@ -55,6 +55,10 @@ class AssessmentChatContextIntegrationTest {
 
     private ChatClient chatClient;
 
+    /**
+     * Resetta dati test e prepara il mock ChatClient per ogni scenario.
+     * Chiamata automaticamente da JUnit 5 prima di ciascun {@code @Test}.
+     */
     @BeforeEach
     void setUp() {
         assessmentResultRepository.deleteAll();
@@ -64,6 +68,12 @@ class AssessmentChatContextIntegrationTest {
         when(chatClientBuilder.build()).thenReturn(chatClient);
     }
 
+    /**
+     * Verifica che la chat assessment usi solo il contesto della macchina selezionata.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void assessment_chat_contestualizza_solo_sulla_macchina_selezionata() throws Exception {
@@ -102,6 +112,12 @@ class AssessmentChatContextIntegrationTest {
         assertThat(prompt, not(containsString("DIFETTO_B_TOKEN")));
     }
 
+    /**
+     * Verifica che il prompt includa non conformità e raccomandazioni per risposte operative pertinenti.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void assessment_chat_invia_difetti_e_raccomandazioni_per_risposte_pertinenti() throws Exception {
@@ -140,6 +156,12 @@ class AssessmentChatContextIntegrationTest {
         assertThat(prompt, containsString("RACCOMANDAZIONE_PERTINENTE_INSTALLARE_RIPARO"));
     }
 
+    /**
+     * Verifica l'isolamento dei dati tra assessment di macchine diverse in chiamate consecutive.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void assessment_chat_isola_i_dati_tra_assessment_di_macchine_diverse() throws Exception {
@@ -200,6 +222,15 @@ class AssessmentChatContextIntegrationTest {
         assertThat(promptB, not(containsString("DIFETTO_ISOLAMENTO_A_TOKEN")));
     }
 
+    /**
+     * Crea e salva un assessment sintetico con token univoci per verificare il contesto nei test.
+     * Chiamata dai metodi di test di questa classe.
+     *
+     * @param machineToken token identificativo macchina
+     * @param difettoToken token non conformità
+     * @param raccomandazioneToken token raccomandazione
+     * @return assessment persistito
+     */
     private AssessmentResult salvaAssessment(String machineToken, String difettoToken, String raccomandazioneToken) {
         Macchinario macchinario = new Macchinario();
         macchinario.setNome("Nome " + machineToken);

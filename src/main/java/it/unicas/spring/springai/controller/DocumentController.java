@@ -24,6 +24,14 @@ public class DocumentController {
 
     private final PdfIngestionService pdfIngestionService;
 
+    /**
+     * Gestisce il caricamento di un PDF, valida formato/contenuto e delega l'ingestione al servizio RAG.
+     * Chiamata da Spring MVC quando arriva una {@code POST /api/documents/upload}; internamente invoca
+     * {@link PdfIngestionService#uploadAndProcessPdf(MultipartFile)}.
+     *
+     * @param file file PDF inviato dal client
+     * @return payload JSON con metadati del documento o errore di validazione/elaborazione
+     */
     @PostMapping("/upload")
     public ResponseEntity<?> uploadPdf(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
@@ -55,6 +63,13 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Restituisce la lista dei documenti caricati con i metadati principali.
+     * Chiamata da Spring MVC tramite {@code GET /api/documents}; usa
+     * {@link PdfIngestionService#getAllDocuments()} come sorgente dati.
+     *
+     * @return elenco documenti normalizzato per la risposta REST
+     */
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllDocuments() {
         List<DocumentEntity> documents = pdfIngestionService.getAllDocuments();
@@ -73,6 +88,14 @@ public class DocumentController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Recupera i dettagli di un singolo documento.
+     * Chiamata da Spring MVC tramite {@code GET /api/documents/{id}}; delega a
+     * {@link PdfIngestionService#getDocument(Long)}.
+     *
+     * @param id identificativo del documento
+     * @return metadati del documento oppure 404 se non esiste
+     */
     @GetMapping("/{id}")
     public ResponseEntity<?> getDocument(@PathVariable Long id) {
         try {
@@ -94,6 +117,14 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Fornisce il contenuto binario del PDF per il download.
+     * Chiamata da Spring MVC tramite {@code GET /api/documents/{id}/download}; recupera il documento
+     * con {@link PdfIngestionService#getDocument(Long)} e imposta gli header HTTP di allegato.
+     *
+     * @param id identificativo del documento
+     * @return bytes PDF con header di download oppure 404
+     */
     @GetMapping("/{id}/download")
     public ResponseEntity<byte[]> downloadDocument(@PathVariable Long id) {
         try {
@@ -110,6 +141,14 @@ public class DocumentController {
         }
     }
 
+    /**
+     * Elimina un documento già caricato.
+     * Chiamata da Spring MVC tramite {@code DELETE /api/documents/{id}}; invoca
+     * {@link PdfIngestionService#deleteDocument(Long)} per la cancellazione.
+     *
+     * @param id identificativo del documento
+     * @return conferma operazione o 404 se il documento non esiste
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteDocument(@PathVariable Long id) {
         try {

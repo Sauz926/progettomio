@@ -22,14 +22,24 @@ public class RagService {
     private static final double DEFAULT_SIMILARITY_THRESHOLD = 0.7;
 
     /**
-     * Cerca documenti rilevanti nel vector store basandosi sulla query
+     * Esegue una ricerca vettoriale con i parametri di default.
+     * Chiamata dai servizi di dominio che non devono personalizzare il numero di chunk
+     * (es. {@link AssessmentService} quando usa il contesto legacy).
+     *
+     * @param query testo della domanda/requisito da cercare
+     * @return lista di documenti rilevanti recuperati dal vector store
      */
     public List<Document> searchRelevantDocuments(String query) {
         return searchRelevantDocuments(query, DEFAULT_TOP_K);
     }
 
     /**
-     * Cerca documenti rilevanti con numero specifico di risultati
+     * Esegue la ricerca vettoriale con numero risultati configurabile.
+     * Chiamata da {@link ChatbotService}, {@link AssessmentService} e altri servizi che controllano la profondità RAG.
+     *
+     * @param query testo su cui fare similarità semantica
+     * @param topK numero massimo di chunk da recuperare
+     * @return documenti più simili alla query
      */
     public List<Document> searchRelevantDocuments(String query, int topK) {
         log.info("Searching for relevant documents with query: {}", query);
@@ -47,7 +57,11 @@ public class RagService {
     }
 
     /**
-     * Crea un contesto concatenato dai documenti rilevanti
+     * Costruisce direttamente il contesto testuale partendo dalla query.
+     * Chiamata dal fallback legacy in {@link AssessmentService#generateAssessment(Long)} dopo la risoluzione del macchinario.
+     *
+     * @param query domanda/descrizione da usare per la ricerca
+     * @return contesto pronto da passare al modello LLM
      */
     public String buildContext(String query) {
         List<Document> relevantDocs = searchRelevantDocuments(query);
@@ -55,7 +69,11 @@ public class RagService {
     }
 
     /**
-     * Crea un contesto da una lista di documenti
+     * Concatena i chunk recuperati in un testo unico leggibile dal prompt.
+     * Chiamata internamente da {@link #buildContext(String)} e dal fallback legacy di {@link AssessmentService}.
+     *
+     * @param documents chunk recuperati dal vector store
+     * @return stringa contestuale con metadati fonte e contenuto
      */
     public String buildContextFromDocuments(List<Document> documents) {
         if (documents.isEmpty()) {
@@ -83,7 +101,11 @@ public class RagService {
     }
 
     /**
-     * Ottiene i nomi dei documenti utilizzati nel contesto
+     * Estrae e deduplica i nomi delle fonti dai metadati dei chunk.
+     * Chiamata principalmente da {@link AssessmentService} per popolare il campo "documenti utilizzati".
+     *
+     * @param documents chunk usati nell'elaborazione
+     * @return lista nomi documento senza duplicati
      */
     public List<String> getDocumentSources(List<Document> documents) {
         return documents.stream()

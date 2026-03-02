@@ -48,6 +48,12 @@ class PdfUploadMachineExtractionIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Verifica il flusso di upload manuale PDF e l'estrazione campi macchina via endpoint dedicato.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori HTTP/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void pdf_upload_allows_machine_data_extraction_via_manual_endpoint() throws Exception {
@@ -112,6 +118,14 @@ class PdfUploadMachineExtractionIntegrationTest {
         assertThat(userPrompt, containsString("SN-TEST-001"));
     }
 
+    /**
+     * Costruisce un PDF minimale in memoria con testo multilinea per i test.
+     * Chiamata da {@link #pdf_upload_allows_machine_data_extraction_via_manual_endpoint()}.
+     *
+     * @param content contenuto testuale da inserire nel PDF
+     * @return bytes del PDF generato
+     * @throws IOException se PDFBox non riesce a creare/salvare il documento
+     */
     private static byte[] createPdf(String content) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
@@ -140,4 +154,3 @@ class PdfUploadMachineExtractionIntegrationTest {
         }
     }
 }
-

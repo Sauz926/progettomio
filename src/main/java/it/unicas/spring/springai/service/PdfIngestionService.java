@@ -29,6 +29,14 @@ public class PdfIngestionService {
     private final VectorStore vectorStore;
     private final DocumentRepository documentRepository;
 
+    /**
+     * Registra il file PDF nel database e avvia subito l'ingestione nel vector store.
+     * Chiamata dal controller documenti endpoint upload.
+     *
+     * @param file file caricato dall'utente
+     * @return entità documento persistita e processata
+     * @throws IOException se la lettura del file fallisce
+     */
     @Transactional
     public DocumentEntity uploadAndProcessPdf(MultipartFile file) throws IOException {
         log.info("Processing PDF file: {}", file.getOriginalFilename());
@@ -50,6 +58,12 @@ public class PdfIngestionService {
         return documentEntity;
     }
 
+    /**
+     * Legge il PDF, crea i chunk semantici, arricchisce i metadati e li salva nel vector store.
+     * Chiamata da {@link #uploadAndProcessPdf(MultipartFile)}.
+     *
+     * @param documentEntity documento già salvato nel DB con contenuto binario
+     */
     @Transactional
     public void processAndStoreEmbeddings(DocumentEntity documentEntity) {
         log.info("Generating embeddings for document: {}", documentEntity.getOriginalFileName());
@@ -57,6 +71,12 @@ public class PdfIngestionService {
         try {
             // Crea una risorsa dal contenuto del file
             ByteArrayResource resource = new ByteArrayResource(documentEntity.getFileContent()) {
+                /**
+                 * Fornisce il nome originale del documento al reader PDF.
+                 * Chiamata internamente da {@link PagePdfDocumentReader}.
+                 *
+                 * @return nome file originale caricato
+                 */
                 @Override
                 public String getFilename() {
                     return documentEntity.getOriginalFileName();
@@ -108,6 +128,13 @@ public class PdfIngestionService {
         }
     }
 
+    /**
+     * Estrae il numero pagina da metadati eterogenei prodotti dal reader/splitter.
+     * Chiamata da {@link #processAndStoreEmbeddings(DocumentEntity)} durante l'arricchimento chunk.
+     *
+     * @param metadata metadati chunk
+     * @return numero pagina o {@code null} se non interpretabile
+     */
     private Integer extractPageNumber(Map<String, Object> metadata) {
         if (metadata == null || metadata.isEmpty()) return null;
 
@@ -133,15 +160,34 @@ public class PdfIngestionService {
         return null;
     }
 
+    /**
+     * Recupera tutti i documenti caricati ordinati per data upload.
+     * Chiamata dal controller documenti endpoint lista.
+     *
+     * @return documenti persistiti
+     */
     public List<DocumentEntity> getAllDocuments() {
         return documentRepository.findAllByOrderByUploadDateDesc();
     }
 
+    /**
+     * Recupera un documento per ID.
+     * Chiamata dal controller documenti per dettaglio/download/delete.
+     *
+     * @param id identificativo documento
+     * @return documento trovato
+     */
     public DocumentEntity getDocument(Long id) {
         return documentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Document not found with id: " + id));
     }
 
+    /**
+     * Elimina il documento dal database (con TODO aperto per rimozione embeddings).
+     * Chiamata dal controller documenti endpoint delete.
+     *
+     * @param id identificativo documento
+     */
     @Transactional
     public void deleteDocument(Long id) {
         DocumentEntity document = getDocument(id);

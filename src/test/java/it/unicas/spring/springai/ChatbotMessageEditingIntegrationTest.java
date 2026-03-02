@@ -53,12 +53,22 @@ class ChatbotMessageEditingIntegrationTest {
 
     private ChatClient chatClient;
 
+    /**
+     * Inizializza il mock ChatClient deep-stub usato nei test di questa classe.
+     * Chiamata automaticamente da JUnit 5 prima di ogni metodo {@code @Test}.
+     */
     @BeforeEach
     void setUp() {
         chatClient = mock(ChatClient.class, Answers.RETURNS_DEEP_STUBS);
         when(chatClientBuilder.build()).thenReturn(chatClient);
     }
 
+    /**
+     * Verifica che la modifica di un messaggio utente rigeneri la risposta usando la domanda aggiornata.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori HTTP/mock
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void modifica_messaggio_inoltra_nuova_domanda_e_restituisce_risposta_rigenerata() throws Exception {

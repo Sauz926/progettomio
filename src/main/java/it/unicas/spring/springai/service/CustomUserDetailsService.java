@@ -17,6 +17,15 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;
 
+    /**
+     * Carica l'utente applicativo per autenticazione Spring Security.
+     * Chiamata automaticamente da {@link org.springframework.security.authentication.AuthenticationManager}
+     * durante il login; traduce ruoli applicativi nel formato {@code ROLE_*}.
+     *
+     * @param username username inserito in fase di login
+     * @return dettagli utente compatibili con Spring Security
+     * @throws UsernameNotFoundException se l'utente non esiste nel repository
+     */
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = userRepository.findByUsername(username)

@@ -22,6 +22,13 @@ public class AssessmentController {
     private final AssessmentService assessmentService;
     private final AssessmentChatService assessmentChatService;
 
+    /**
+     * Espone l'elenco completo degli assessment salvati.
+     * Chiamata da Spring MVC tramite {@code GET /api/assessments}; utilizza
+     * {@link AssessmentService#getAllAssessments()} e converte ciascuna entità nel payload REST.
+     *
+     * @return lista di assessment in formato JSON
+     */
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllAssessments() {
         List<AssessmentResult> assessments = assessmentService.getAllAssessments();
@@ -31,6 +38,14 @@ public class AssessmentController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Restituisce il dettaglio di un assessment specifico.
+     * Chiamata da Spring MVC tramite {@code GET /api/assessments/{id}}; delega a
+     * {@link AssessmentService#getAssessment(Long)}.
+     *
+     * @param id identificativo assessment
+     * @return assessment richiesto o 404 se non trovato
+     */
     @GetMapping("/{id}")
     public ResponseEntity<?> getAssessment(@PathVariable Long id) {
         try {
@@ -41,6 +56,15 @@ public class AssessmentController {
         }
     }
 
+    /**
+     * Gestisce una domanda contestuale su un assessment già generato.
+     * Chiamata da Spring MVC tramite {@code POST /api/assessments/{id}/chat}; invoca
+     * {@link AssessmentChatService#chat(Long, AssessmentChatRequest)}.
+     *
+     * @param id identificativo assessment
+     * @param request corpo con domanda e storia chat
+     * @return risposta testuale contestualizzata o errore di validazione/elaborazione
+     */
     @PostMapping("/{id}/chat")
     public ResponseEntity<?> chatOnAssessment(@PathVariable Long id, @RequestBody AssessmentChatRequest request) {
         try {
@@ -58,6 +82,14 @@ public class AssessmentController {
         }
     }
 
+    /**
+     * Converte un'entità {@link AssessmentResult} nel formato mappa restituito dall'API.
+     * Chiamata internamente da {@link #getAllAssessments()} e {@link #getAssessment(Long)} per mantenere
+     * coerente lo schema di risposta.
+     *
+     * @param assessment entità assessment persistita
+     * @return mappa serializzabile con i campi esposti al client
+     */
     private Map<String, Object> mapAssessmentToResponse(AssessmentResult assessment) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", assessment.getId());

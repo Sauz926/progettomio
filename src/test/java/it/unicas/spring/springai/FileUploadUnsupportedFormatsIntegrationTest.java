@@ -34,6 +34,12 @@ class FileUploadUnsupportedFormatsIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Verifica che l'endpoint upload documenti rifiuti file non PDF.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void documents_upload_rejects_non_pdf_files() throws Exception {
@@ -51,6 +57,12 @@ class FileUploadUnsupportedFormatsIntegrationTest {
                 .andExpect(jsonPath("$.error").value("Solo file PDF sono accettati"));
     }
 
+    /**
+     * Verifica che l'endpoint estrazione manuale rifiuti file non PDF anche senza content-type.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void manual_extract_rejects_non_pdf_files_even_without_content_type() throws Exception {
@@ -68,4 +80,3 @@ class FileUploadUnsupportedFormatsIntegrationTest {
                 .andExpect(jsonPath("$.error").value("Solo file PDF sono accettati"));
     }
 }
-

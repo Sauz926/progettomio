@@ -32,6 +32,12 @@ class MacchinarioRequiredFieldsIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Verifica che la creazione macchinario richieda obbligatoriamente il campo nome.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void create_macchinario_requires_nome() throws Exception {
@@ -49,6 +55,12 @@ class MacchinarioRequiredFieldsIntegrationTest {
                 .andExpect(jsonPath("$.error").value(containsString("nome")));
     }
 
+    /**
+     * Verifica che il campo nome non possa essere valorizzato con soli spazi.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void create_macchinario_rejects_blank_nome() throws Exception {
@@ -67,4 +79,3 @@ class MacchinarioRequiredFieldsIntegrationTest {
                 .andExpect(jsonPath("$.error").value(containsString("nome")));
     }
 }
-

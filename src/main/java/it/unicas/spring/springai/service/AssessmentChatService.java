@@ -67,6 +67,14 @@ public class AssessmentChatService {
     ) {
     }
 
+    /**
+     * Gestisce una domanda contestuale su un assessment già salvato.
+     * Chiamata dal controller assessment nell'endpoint {@code POST /api/assessments/{id}/chat}.
+     *
+     * @param assessmentId assessment su cui contestualizzare la risposta
+     * @param request domanda utente con storia opzionale
+     * @return risposta LLM contestualizzata ai dati dell'assessment
+     */
     @Transactional(readOnly = true)
     public String chat(Long assessmentId, AssessmentChatRequest request) {
         if (assessmentId == null) {
@@ -114,6 +122,13 @@ public class AssessmentChatService {
         return answer != null ? answer.trim() : "";
     }
 
+    /**
+     * Parsea finding serializzati in JSON oppure in formato elenco testuale.
+     * Chiamata da {@link #chat(Long, AssessmentChatRequest)} su non conformità e raccomandazioni.
+     *
+     * @param raw stringa salvata nel campo assessment
+     * @return lista finding normalizzata
+     */
     private List<ExplainableFinding> parseFindings(String raw) {
         if (raw == null || raw.isBlank()) return List.of();
 
@@ -143,6 +158,13 @@ public class AssessmentChatService {
         return findings;
     }
 
+    /**
+     * Pulisce una riga elenco rimuovendo marker numerici/bullet.
+     * Chiamata da {@link #parseFindings(String)}.
+     *
+     * @param input riga originale
+     * @return testo finding pulito
+     */
     private String cleanBulletLine(String input) {
         if (input == null) return "";
         String line = input.trim();
@@ -153,6 +175,14 @@ public class AssessmentChatService {
         return line.trim();
     }
 
+    /**
+     * Costruisce una mappa deduplicata delle fonti citate nei finding.
+     * Chiamata da {@link #chat(Long, AssessmentChatRequest)} prima della costruzione contesto.
+     *
+     * @param nonConformita non conformità parse
+     * @param raccomandazioni raccomandazioni parse
+     * @return mappa chiave-fonte con id sintetico stabile
+     */
     private Map<String, SourceDescriptor> buildSources(List<ExplainableFinding> nonConformita, List<ExplainableFinding> raccomandazioni) {
         LinkedHashMap<String, SourceDescriptor> sources = new LinkedHashMap<>();
 
@@ -184,6 +214,13 @@ public class AssessmentChatService {
         return sources;
     }
 
+    /**
+     * Genera una chiave tecnica per deduplicare le fonti.
+     * Chiamata da {@link #buildSources(List, List)} e {@link #renderFindings(List, String, Map)}.
+     *
+     * @param source fonte explainable
+     * @return fingerprint deterministico della fonte
+     */
     private String sourceKey(ExplainableSource source) {
         String reference = normalizeForKey(source.reference());
         String fileName = normalizeForKey(source.fileName());
@@ -193,6 +230,17 @@ public class AssessmentChatService {
         return reference + "|" + fileName + "|" + page + "|" + fingerprint;
     }
 
+    /**
+     * Costruisce il contesto completo (macchina + assessment + finding + fonti) da dare al modello.
+     * Chiamata da {@link #chat(Long, AssessmentChatRequest)}.
+     *
+     * @param macchinario macchina associata
+     * @param assessment assessment corrente
+     * @param nonConformita elenco non conformità
+     * @param raccomandazioni elenco raccomandazioni
+     * @param sources fonti indicizzate
+     * @return contesto testuale per il prompt
+     */
     private String buildContext(
             Macchinario macchinario,
             AssessmentResult assessment,
@@ -254,6 +302,15 @@ public class AssessmentChatService {
         return sb.toString();
     }
 
+    /**
+     * Renderizza finding con eventuale collegamento alle fonti sintetiche.
+     * Chiamata da {@link #buildContext(Macchinario, AssessmentResult, List, List, Map)}.
+     *
+     * @param findings lista elementi da stampare
+     * @param prefix prefisso identificativo (es. NC, REC)
+     * @param sources mappa fonti disponibili
+     * @return blocco testuale pronto da includere nel contesto
+     */
     private String renderFindings(List<ExplainableFinding> findings, String prefix, Map<String, SourceDescriptor> sources) {
         if (findings == null || findings.isEmpty()) {
             return "Nessuna informazione disponibile.\n";
@@ -291,6 +348,13 @@ public class AssessmentChatService {
         return sb.toString();
     }
 
+    /**
+     * Normalizza e limita la storia chat inviata al modello.
+     * Chiamata da {@link #chat(Long, AssessmentChatRequest)}.
+     *
+     * @param history cronologia lato client
+     * @return sezione storia pronta per il prompt
+     */
     private String buildHistorySection(List<ChatTurn> history) {
         if (history == null || history.isEmpty()) {
             return "=== STORIA CHAT ===\nNessuna.\n";
@@ -318,6 +382,14 @@ public class AssessmentChatService {
         return sb.toString();
     }
 
+    /**
+     * Tronca un testo al limite massimo previsto.
+     * Chiamata da {@link #buildSources(List, List)} per gli estratti di chunk.
+     *
+     * @param text testo originale
+     * @param maxChars limite caratteri
+     * @return testo eventualmente troncato
+     */
     private String excerpt(String text, int maxChars) {
         if (text == null) return "";
         String trimmed = text.trim();
@@ -325,18 +397,39 @@ public class AssessmentChatService {
         return trimmed.substring(0, maxChars) + "…";
     }
 
+    /**
+     * Restituisce "N/D" quando il valore è nullo o blank.
+     * Chiamata da {@link #buildContext(Macchinario, AssessmentResult, List, List, Map)}.
+     *
+     * @param value valore sorgente
+     * @return valore normalizzato per output contesto
+     */
     private String nd(String value) {
         if (value == null) return "N/D";
         String trimmed = value.trim();
         return trimmed.isBlank() ? "N/D" : trimmed;
     }
 
+    /**
+     * Converte valori null/blank in stringa vuota.
+     * Chiamata in più helper di serializzazione contesto/fonti.
+     *
+     * @param value valore sorgente
+     * @return stringa pulita
+     */
     private String blank(String value) {
         if (value == null) return "";
         String trimmed = value.trim();
         return trimmed.isBlank() ? "" : trimmed;
     }
 
+    /**
+     * Normalizza una stringa per uso in chiavi tecniche.
+     * Chiamata da {@link #sourceKey(ExplainableSource)}.
+     *
+     * @param value valore sorgente
+     * @return stringa trimmata o vuota
+     */
     private String normalizeForKey(String value) {
         return value == null ? "" : value.trim();
     }

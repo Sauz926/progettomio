@@ -8,6 +8,10 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 class SpringaiApplicationTests {
 
+    /**
+     * Verifica il bootstrap del contesto Spring senza eccezioni.
+     * Chiamata dal runner JUnit 5 come smoke test di avvio applicazione.
+     */
     @Test
     void contextLoads() {
         // Test will pass if context loads successfully

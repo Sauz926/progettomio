@@ -30,6 +30,12 @@ class ChatbotInterfaceContractIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Verifica la presenza dei componenti HTML fondamentali del widget chatbot.
+     * Chiamata dal runner JUnit 5 nel controllo contratti UI.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     @WithMockUser(username = "user", roles = "USER")
     void pagina_index_contiene_tutti_i_componenti_chat_essenziali() throws Exception {
@@ -44,6 +50,12 @@ class ChatbotInterfaceContractIntegrationTest {
                 .andExpect(content().string(containsString("aria-live=\"polite\"")));
     }
 
+    /**
+     * Verifica che il JavaScript includa le funzioni chiave per invio, rendering e stato input.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     void javascript_chatbot_gestisce_render_e_flusso_invio_in_modo_affidabile() throws Exception {
         mockMvc.perform(get("/js/app.js"))
@@ -58,6 +70,12 @@ class ChatbotInterfaceContractIntegrationTest {
                 .andExpect(content().string(containsString("renderChatbotMessageSourcesHtml")));
     }
 
+    /**
+     * Verifica che il CSS del chatbot esponga regole layout e responsive minime attese.
+     * Chiamata dal runner JUnit 5.
+     *
+     * @throws Exception in caso di errori MockMvc
+     */
     @Test
     void css_chatbot_ha_regole_layout_chiare_e_responsive() throws Exception {
         mockMvc.perform(get("/css/style.css"))

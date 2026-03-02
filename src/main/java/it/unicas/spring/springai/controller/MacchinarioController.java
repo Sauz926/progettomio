@@ -34,6 +34,14 @@ public class MacchinarioController {
     private final MachineManualExtractionService machineManualExtractionService;
     private final AssessmentPdfService assessmentPdfService;
 
+    /**
+     * Crea un nuovo macchinario validando i campi minimi richiesti.
+     * Chiamata da Spring MVC tramite {@code POST /api/macchinari}; delega il salvataggio a
+     * {@link MacchinarioService#create(Macchinario)}.
+     *
+     * @param macchinario payload inviato dal client
+     * @return macchinario creato oppure errore di validazione
+     */
     @PostMapping
     public ResponseEntity<?> createMacchinario(@RequestBody Macchinario macchinario) {
         if (macchinario == null || macchinario.getNome() == null || macchinario.getNome().isBlank()) {
@@ -45,11 +53,26 @@ public class MacchinarioController {
         return ResponseEntity.ok(created);
     }
 
+    /**
+     * Restituisce tutti i macchinari ordinati per data creazione.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari}; usa
+     * {@link MacchinarioService#getAll()}.
+     *
+     * @return elenco dei macchinari disponibili
+     */
     @GetMapping
     public ResponseEntity<List<Macchinario>> getAllMacchinari() {
         return ResponseEntity.ok(macchinarioService.getAll());
     }
 
+    /**
+     * Recupera il dettaglio di un macchinario per ID.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari/{id}}; invoca
+     * {@link MacchinarioService#getById(Long)}.
+     *
+     * @param id identificativo macchinario
+     * @return macchinario richiesto o 404
+     */
     @GetMapping("/{id}")
     public ResponseEntity<Macchinario> getMacchinario(@PathVariable Long id) {
         try {
@@ -59,6 +82,15 @@ public class MacchinarioController {
         }
     }
 
+    /**
+     * Aggiorna i dati anagrafici/tecnici di un macchinario esistente.
+     * Chiamata da Spring MVC tramite {@code PUT /api/macchinari/{id}}; delega a
+     * {@link MacchinarioService#update(Long, Macchinario)}.
+     *
+     * @param id identificativo macchinario
+     * @param macchinario nuovo stato richiesto dal client
+     * @return macchinario aggiornato o errore di validazione/404
+     */
     @PutMapping("/{id}")
     public ResponseEntity<?> updateMacchinario(@PathVariable Long id, @RequestBody Macchinario macchinario) {
         if (macchinario == null || macchinario.getNome() == null || macchinario.getNome().isBlank()) {
@@ -73,6 +105,14 @@ public class MacchinarioController {
         }
     }
 
+    /**
+     * Elimina un macchinario esistente.
+     * Chiamata da Spring MVC tramite {@code DELETE /api/macchinari/{id}}; usa
+     * {@link MacchinarioService#delete(Long)}.
+     *
+     * @param id identificativo macchinario
+     * @return conferma cancellazione o 404
+     */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteMacchinario(@PathVariable Long id) {
         try {
@@ -83,16 +123,40 @@ public class MacchinarioController {
         }
     }
 
+    /**
+     * Esegue ricerca testuale per nome macchinario.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari/search}; invoca
+     * {@link MacchinarioService#searchByName(String)}.
+     *
+     * @param nome filtro nome parziale
+     * @return lista macchinari corrispondenti
+     */
     @GetMapping("/search")
     public ResponseEntity<List<Macchinario>> searchMacchinari(@RequestParam String nome) {
         return ResponseEntity.ok(macchinarioService.searchByName(nome));
     }
 
+    /**
+     * Restituisce i macchinari appartenenti a una categoria.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari/categoria/{categoria}}; delega a
+     * {@link MacchinarioService#getByCategoria(String)}.
+     *
+     * @param categoria categoria richiesta
+     * @return macchinari della categoria indicata
+     */
     @GetMapping("/categoria/{categoria}")
     public ResponseEntity<List<Macchinario>> getByCategoria(@PathVariable String categoria) {
         return ResponseEntity.ok(macchinarioService.getByCategoria(categoria));
     }
 
+    /**
+     * Estrae automaticamente i dati del macchinario da un manuale PDF caricato.
+     * Chiamata da Spring MVC tramite {@code POST /api/macchinari/manual/extract}; valida il file e poi usa
+     * {@link MachineManualExtractionService#extractFromManual(MultipartFile)}.
+     *
+     * @param file manuale PDF da analizzare
+     * @return struttura dati estratta o errore di validazione/elaborazione
+     */
     @PostMapping("/manual/extract")
     public ResponseEntity<?> extractFromManual(@RequestParam("file") MultipartFile file) {
         if (file.isEmpty()) {
@@ -122,6 +186,14 @@ public class MacchinarioController {
 
     // Assessment endpoints
 
+    /**
+     * Genera un nuovo assessment di conformità per il macchinario indicato.
+     * Chiamata da Spring MVC tramite {@code POST /api/macchinari/{id}/assessment}; invoca
+     * {@link AssessmentService#generateAssessment(Long)}.
+     *
+     * @param id identificativo macchinario
+     * @return assessment appena generato o errore di business
+     */
     @PostMapping("/{id}/assessment")
     public ResponseEntity<?> generateAssessment(@PathVariable Long id) {
         try {
@@ -134,6 +206,14 @@ public class MacchinarioController {
         }
     }
 
+    /**
+     * Elenca gli assessment storici di un macchinario.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari/{id}/assessments}; usa
+     * {@link AssessmentService#getAssessmentsByMacchinario(Long)}.
+     *
+     * @param id identificativo macchinario
+     * @return lista assessment ordinati dal più recente
+     */
     @GetMapping("/{id}/assessments")
     public ResponseEntity<List<Map<String, Object>>> getAssessments(@PathVariable Long id) {
         List<AssessmentResult> assessments = assessmentService.getAssessmentsByMacchinario(id);
@@ -143,6 +223,15 @@ public class MacchinarioController {
         return ResponseEntity.ok(response);
     }
 
+    /**
+     * Genera e scarica il PDF dell'ultimo assessment disponibile per il macchinario.
+     * Chiamata da Spring MVC tramite {@code GET /api/macchinari/{id}/assessments/latest/pdf}; coordina
+     * {@link MacchinarioService#getById(Long)}, {@link AssessmentService#getAssessmentsByMacchinario(Long)}
+     * e {@link AssessmentPdfService#generateAssessmentPdf(Macchinario, AssessmentResult)}.
+     *
+     * @param id identificativo macchinario
+     * @return stream PDF in download oppure errore 404/500
+     */
     @GetMapping("/{id}/assessments/latest/pdf")
     public ResponseEntity<?> downloadLatestAssessmentPdf(@PathVariable Long id) {
         Macchinario macchinario;
@@ -180,6 +269,13 @@ public class MacchinarioController {
         }
     }
 
+    /**
+     * Converte un assessment nel formato risposta usato dai controller REST.
+     * Chiamata internamente da {@link #generateAssessment(Long)} e {@link #getAssessments(Long)}.
+     *
+     * @param assessment assessment da serializzare
+     * @return mappa campi da restituire al client
+     */
     private Map<String, Object> mapAssessmentToResponse(AssessmentResult assessment) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", assessment.getId());

@@ -81,6 +81,13 @@ public class AssessmentService {
     ) {
     }
 
+    /**
+     * Genera un assessment partendo dall'ID del macchinario.
+     * Chiamata dal controller macchinari nell'endpoint di generazione assessment.
+     *
+     * @param macchinarioId identificativo del macchinario
+     * @return assessment generato e persistito
+     */
     @Transactional
     public AssessmentResult generateAssessment(Long macchinarioId) {
         log.info("Generating assessment for macchinario ID: {}", macchinarioId);
@@ -91,6 +98,14 @@ public class AssessmentService {
         return generateAssessment(macchinario);
     }
 
+    /**
+     * Genera l'assessment completo per un macchinario già risolto.
+     * Chiamata da {@link #generateAssessment(Long)}; coordina retrieval RAG, inferenza explainable,
+     * fallback legacy e persistenza finale.
+     *
+     * @param macchinario entità macchina da valutare
+     * @return assessment salvato nel repository
+     */
     @Transactional
     public AssessmentResult generateAssessment(Macchinario macchinario) {
         log.info("Generating assessment for macchinario: {}", macchinario.getNome());
@@ -138,6 +153,13 @@ public class AssessmentService {
         return assessment;
     }
 
+    /**
+     * Costruisce la query RAG combinando categoria, nome e contesto macchina.
+     * Chiamata da {@link #generateAssessment(Macchinario)}.
+     *
+     * @param macchinario macchina in valutazione
+     * @return query semantica per retrieval normativo
+     */
     private String buildRagQuery(Macchinario macchinario) {
         StringBuilder query = new StringBuilder();
         query.append("Requisiti di sicurezza e conformità per ");
@@ -153,6 +175,14 @@ public class AssessmentService {
         return query.toString();
     }
 
+    /**
+     * Costruisce il prompt legacy testuale (non JSON explainable).
+     * Chiamata nel fallback di {@link #generateAssessment(Macchinario)} quando il parsing explainable fallisce.
+     *
+     * @param macchinario macchina da valutare
+     * @param context contesto RAG concatenato
+     * @return prompt pronto per il modello
+     */
     private String buildAssessmentPrompt(Macchinario macchinario, String context) {
         return String.format("""
                 Analizza il seguente macchinario e fornisci un assessment di conformità basandoti sui documenti di riferimento.
@@ -198,6 +228,14 @@ public class AssessmentService {
         );
     }
 
+    /**
+     * Costruisce il prompt explainable con schema JSON e citazioni chunkId.
+     * Chiamata da {@link #generateAssessment(Macchinario)} nel flusso principale.
+     *
+     * @param macchinario macchina da analizzare
+     * @param context chunk normativi recuperati
+     * @return prompt strutturato per output explainable
+     */
     private String buildExplainableAssessmentPrompt(Macchinario macchinario, String context) {
         return String.format("""
                 Analizza il seguente macchinario e fornisci un assessment di conformità basandoti esclusivamente sui chunk normativi forniti.
@@ -240,6 +278,15 @@ public class AssessmentService {
         );
     }
 
+    /**
+     * Converte la risposta JSON explainable nel modello {@link AssessmentResult}.
+     * Chiamata da {@link #generateAssessment(Macchinario)} subito dopo la risposta LLM.
+     *
+     * @param response testo risposta modello
+     * @param macchinario macchina associata
+     * @param retrievedChunks chunk disponibili con metadati fonte
+     * @return assessment opzionale; vuoto se parsing/serializzazione falliscono
+     */
     private Optional<AssessmentResult> parseExplainableAssessmentResponse(String response, Macchinario macchinario, List<RetrievedChunk> retrievedChunks) {
         JsonNode root;
         try {
@@ -310,6 +357,15 @@ public class AssessmentService {
         return Optional.of(assessment);
     }
 
+    /**
+     * Esegue il parsing del formato legacy in sezioni markdown-like.
+     * Chiamata esclusivamente nel fallback di {@link #generateAssessment(Macchinario)}.
+     *
+     * @param response testo completo prodotto dal modello
+     * @param macchinario macchina associata
+     * @param documentSources fonti documentali usate nel contesto
+     * @return assessment popolato da output legacy
+     */
     private AssessmentResult parseAssessmentResponse(String response, Macchinario macchinario, List<String> documentSources) {
         AssessmentResult assessment = new AssessmentResult();
         assessment.setMacchinario(macchinario);
@@ -347,6 +403,13 @@ public class AssessmentService {
         return assessment;
     }
 
+    /**
+     * Trasforma l'array JSON dei finding in bozze interne.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param node nodo JSON nonConformita/raccomandazioni
+     * @return lista bozze finding
+     */
     private List<ExplainableFindingDraft> parseFindingDrafts(JsonNode node) {
         if (node == null || !node.isArray()) return List.of();
 
@@ -373,6 +436,13 @@ public class AssessmentService {
         return drafts;
     }
 
+    /**
+     * Estrae una lista deduplicata di chunkIds da JSON.
+     * Chiamata da {@link #parseFindingDrafts(JsonNode)}.
+     *
+     * @param node array JSON chunkIds
+     * @return lista id univoci
+     */
     private List<Integer> parseChunkIds(JsonNode node) {
         if (node == null || !node.isArray()) return List.of();
 
@@ -384,6 +454,13 @@ public class AssessmentService {
         return List.copyOf(ids);
     }
 
+    /**
+     * Converte un nodo JSON in intero quando possibile.
+     * Chiamata da {@link #parseChunkIds(JsonNode)} e da helper di parsing.
+     *
+     * @param node nodo numerico/testuale
+     * @return intero opzionale
+     */
     private Optional<Integer> intValue(JsonNode node) {
         if (node == null || node.isNull()) return Optional.empty();
         if (node.isInt() || node.isLong()) return Optional.of(node.asInt());
@@ -402,6 +479,14 @@ public class AssessmentService {
         return Optional.empty();
     }
 
+    /**
+     * Legge un campo testuale dal nodo root senza sollevare eccezioni.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param root nodo JSON radice
+     * @param fieldName nome campo
+     * @return testo o {@code null}
+     */
     private String textValue(JsonNode root, String fieldName) {
         if (root == null || fieldName == null) return null;
         JsonNode node = root.get(fieldName);
@@ -409,6 +494,13 @@ public class AssessmentService {
         return node.asText(null);
     }
 
+    /**
+     * Adatta i documenti retrieval in chunk interni con metadati normalizzati.
+     * Chiamata da {@link #generateAssessment(Macchinario)}.
+     *
+     * @param documents documenti RAG grezzi
+     * @return chunk arricchiti con id/pagina/confidenza
+     */
     private List<RetrievedChunk> toRetrievedChunks(List<Document> documents) {
         if (documents == null || documents.isEmpty()) return List.of();
 
@@ -437,6 +529,13 @@ public class AssessmentService {
                 .toList();
     }
 
+    /**
+     * Costruisce il contesto explainable da passare al prompt LLM.
+     * Chiamata da {@link #generateAssessment(Macchinario)}.
+     *
+     * @param chunks chunk normativi recuperati
+     * @return sezione testuale del prompt con chunk numerati
+     */
     private String buildExplainabilityContext(List<RetrievedChunk> chunks) {
         if (chunks == null || chunks.isEmpty()) {
             return "=== CHUNKS NORMATIVI RECUPERATI (RAG) ===\n\nNessun documento di riferimento trovato nel database.\n";
@@ -462,6 +561,14 @@ public class AssessmentService {
         return sb.toString();
     }
 
+    /**
+     * Converte le bozze finding nei finding finali con fonti esplicite.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param drafts bozze con testo e chunkIds
+     * @param chunkById mappa chunk disponibili
+     * @return finding explainable pronti alla serializzazione
+     */
     private List<ExplainableFinding> toExplainableFindings(List<ExplainableFindingDraft> drafts, Map<Integer, RetrievedChunk> chunkById) {
         if (drafts == null || drafts.isEmpty()) return List.of();
 
@@ -482,11 +589,27 @@ public class AssessmentService {
                 .toList();
     }
 
+    /**
+     * Converte un chunk recuperato in una fonte explainable.
+     * Chiamata da {@link #toExplainableFindings(List, Map)}.
+     *
+     * @param chunk chunk normativo selezionato
+     * @return fonte con riferimento, file, pagina e testo
+     */
     private ExplainableSource toExplainableSource(RetrievedChunk chunk) {
         String reference = buildReference(chunk.fileName(), chunk.page(), chunk.text());
         return new ExplainableSource(reference, chunk.fileName(), chunk.page(), chunk.text(), chunk.confidence());
     }
 
+    /**
+     * Costruisce il riferimento umano leggibile della fonte (documento/articolo/pagina).
+     * Chiamata da {@link #toExplainableSource(RetrievedChunk)}.
+     *
+     * @param fileName nome del documento
+     * @param page pagina stimata
+     * @param chunkText testo chunk da cui inferire articolo/comma/paragrafo
+     * @return riferimento formattato
+     */
     private String buildReference(String fileName, Integer page, String chunkText) {
         String base = (fileName == null || fileName.isBlank()) ? "Documento" : fileName.trim();
 
@@ -511,6 +634,14 @@ public class AssessmentService {
         return sb.toString();
     }
 
+    /**
+     * Restituisce la prima occorrenza regex utile nel testo.
+     * Chiamata da {@link #buildReference(String, Integer, String)}.
+     *
+     * @param pattern pattern di ricerca
+     * @param input testo sorgente
+     * @return valore estratto o {@code null}
+     */
     private String firstMatch(Pattern pattern, String input) {
         if (input == null || input.isBlank()) return null;
         Matcher matcher = pattern.matcher(input);
@@ -519,6 +650,13 @@ public class AssessmentService {
         return value != null && !value.isBlank() ? value.trim() : null;
     }
 
+    /**
+     * Prova a convertire metadati eterogenei in intero.
+     * Chiamata da {@link #toRetrievedChunks(List)} per i campi pagina.
+     *
+     * @param value valore metadato
+     * @return intero opzionale
+     */
     private Optional<Integer> parseInteger(Object value) {
         if (value == null) return Optional.empty();
         if (value instanceof Number number) return Optional.of(number.intValue());
@@ -532,11 +670,25 @@ public class AssessmentService {
         }
     }
 
+    /**
+     * Genera uno score di confidenza euristico basato sul rank.
+     * Chiamata da {@link #toRetrievedChunks(List)} quando il chunk non espone score.
+     *
+     * @param rankIndex posizione chunk nei risultati retrieval
+     * @return confidenza normalizzata
+     */
     private Double rankBasedConfidence(int rankIndex) {
         double value = 0.9 - (rankIndex * 0.05);
         return Math.max(0.5, Math.min(0.95, value));
     }
 
+    /**
+     * Isola il primo JSON object nella risposta del modello.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param raw risposta LLM grezza
+     * @return JSON object o {@code {}}
+     */
     private String extractFirstJsonObject(String raw) {
         if (raw == null) return "{}";
         int start = raw.indexOf('{');
@@ -545,12 +697,26 @@ public class AssessmentService {
         return raw.substring(start, end + 1).trim();
     }
 
+    /**
+     * Pulisce una stringa testuale restituendo vuoto per null/blank.
+     * Chiamata da helper di parsing e mapping finding.
+     *
+     * @param value testo sorgente
+     * @return testo pulito o stringa vuota
+     */
     private String safe(String value) {
         if (value == null) return "";
         String trimmed = value.trim();
         return trimmed.isEmpty() ? "" : trimmed;
     }
 
+    /**
+     * Normalizza il livello rischio in uno dei valori ammessi.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param value livello rischio raw
+     * @return livello normalizzato
+     */
     private String normalizeRiskLevel(String value) {
         if (value == null) return "MEDIO";
         String normalized = value.trim().toUpperCase(Locale.ROOT);
@@ -561,11 +727,26 @@ public class AssessmentService {
         return "MEDIO";
     }
 
+    /**
+     * Normalizza il punteggio conformità nel range 0..100.
+     * Chiamata da {@link #parseExplainableAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param value punteggio grezzo
+     * @return punteggio clampato
+     */
     private Integer normalizeScore(Integer value) {
         if (value == null) return 50;
         return Math.min(100, Math.max(0, value));
     }
 
+    /**
+     * Estrae una sezione testuale dal formato legacy dell'output LLM.
+     * Chiamata da {@link #parseAssessmentResponse(String, Macchinario, List)}.
+     *
+     * @param text risposta completa legacy
+     * @param sectionName nome sezione da estrarre
+     * @return contenuto sezione o stringa vuota
+     */
     private String extractSection(String text, String sectionName) {
         String pattern = "## " + sectionName;
         int startIndex = text.indexOf(pattern);
@@ -591,15 +772,35 @@ public class AssessmentService {
         return text.substring(startIndex, endIndex).trim();
     }
 
+    /**
+     * Recupera lo storico assessment di un macchinario.
+     * Chiamata dal controller macchinari per l'endpoint lista assessment.
+     *
+     * @param macchinarioId identificativo macchinario
+     * @return assessment ordinati dal più recente
+     */
     public List<AssessmentResult> getAssessmentsByMacchinario(Long macchinarioId) {
         return assessmentResultRepository.findByMacchinarioIdOrderByDataAssessmentDesc(macchinarioId);
     }
 
+    /**
+     * Recupera un assessment per identificativo.
+     * Chiamata dal controller assessment e dal controller macchinari nei flussi di dettaglio/download.
+     *
+     * @param id identificativo assessment
+     * @return assessment trovato
+     */
     public AssessmentResult getAssessment(Long id) {
         return assessmentResultRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Assessment non trovato con ID: " + id));
     }
 
+    /**
+     * Restituisce tutti gli assessment presenti nel sistema.
+     * Chiamata dal controller assessment per la vista elenco globale.
+     *
+     * @return assessment ordinati per data descrescente
+     */
     public List<AssessmentResult> getAllAssessments() {
         return assessmentResultRepository.findAllByOrderByDataAssessmentDesc();
     }

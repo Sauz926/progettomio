@@ -55,6 +55,12 @@ class LoginFlowIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
+    /**
+     * Valida il flusso end-to-end: login utente, creazione macchinario, generazione assessment e download PDF.
+     * Chiamata dal runner JUnit 5 per assicurare coerenza del percorso applicativo principale.
+     *
+     * @throws Exception in caso di errori HTTP/mock o serializzazione
+     */
     @Test
     void user_can_login_and_reach_final_results_flow() throws Exception {
         mockMvc.perform(get("/index.html"))

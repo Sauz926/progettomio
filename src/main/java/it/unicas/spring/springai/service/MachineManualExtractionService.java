@@ -61,6 +61,15 @@ public class MachineManualExtractionService {
             - specificheTecniche (string|null) // elenco/sommario delle specifiche principali
             """;
 
+    /**
+     * Orchestrazione completa dell'estrazione dati da manuale PDF.
+     * Chiamata da {@link it.unicas.spring.springai.controller.MacchinarioController#extractFromManual(org.springframework.web.multipart.MultipartFile)};
+     * legge le pagine, costruisce l'estratto, invoca il modello e normalizza il risultato.
+     *
+     * @param file manuale PDF caricato dall'utente
+     * @return DTO con i campi macchina estratti e normalizzati
+     * @throws IOException se il file non può essere letto
+     */
     public MachineManualExtractResponse extractFromManual(MultipartFile file) throws IOException {
         String originalFileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "manuale.pdf";
 
@@ -100,8 +109,22 @@ public class MachineManualExtractionService {
         return parsed;
     }
 
+    /**
+     * Legge tutte le pagine PDF in formato {@link Document}.
+     * Chiamata da {@link #extractFromManual(MultipartFile)}.
+     *
+     * @param file file sorgente
+     * @return lista pagine lette dal reader PDF
+     * @throws IOException se il contenuto del file non è leggibile
+     */
     private List<Document> readPdfPages(MultipartFile file) throws IOException {
         ByteArrayResource resource = new ByteArrayResource(file.getBytes()) {
+            /**
+             * Espone il nome file originale al reader PDF.
+             * Chiamata internamente da {@link PagePdfDocumentReader} durante la lettura del resource.
+             *
+             * @return nome originale del file caricato
+             */
             @Override
             public String getFilename() {
                 return file.getOriginalFilename();
@@ -112,6 +135,13 @@ public class MachineManualExtractionService {
         return pdfReader.get();
     }
 
+    /**
+     * Seleziona e compatta le sezioni più informative del manuale entro un limite di lunghezza.
+     * Chiamata da {@link #extractFromManual(MultipartFile)} prima dell'invocazione LLM.
+     *
+     * @param pages pagine PDF già estratte
+     * @return estratto testuale orientato ai dati macchina
+     */
     private String buildRelevantExcerpt(List<Document> pages) {
         if (pages == null || pages.isEmpty()) {
             return "";
@@ -178,6 +208,13 @@ public class MachineManualExtractionService {
         return sb.toString();
     }
 
+    /**
+     * Converte la risposta LLM in DTO tipizzato e normalizzato.
+     * Chiamata da {@link #extractFromManual(MultipartFile)} dopo l'inferenza.
+     *
+     * @param aiResponse testo grezzo restituito dal modello
+     * @return dati macchina normalizzati
+     */
     private MachineManualExtractResponse parseAndNormalize(String aiResponse) {
         String json = extractJsonObject(aiResponse);
 
@@ -209,6 +246,13 @@ public class MachineManualExtractionService {
         }
     }
 
+    /**
+     * Estrae il primo oggetto JSON valido dal testo LLM.
+     * Chiamata da {@link #parseAndNormalize(String)} per isolare eventuale rumore testuale.
+     *
+     * @param text risposta grezza modello
+     * @return JSON object come stringa, o {@code {}} se non trovato
+     */
     private String extractJsonObject(String text) {
         if (text == null) {
             return "{}";
@@ -237,6 +281,13 @@ public class MachineManualExtractionService {
         return trimmed.substring(start, end + 1);
     }
 
+    /**
+     * Normalizza la categoria in uno dei valori ammessi dall'applicazione.
+     * Chiamata da {@link #parseAndNormalize(String)}.
+     *
+     * @param raw categoria generata dal modello
+     * @return categoria canonicalizzata o {@code null}
+     */
     private String normalizeCategoria(String raw) {
         if (isBlank(raw)) return null;
 
@@ -258,6 +309,14 @@ public class MachineManualExtractionService {
         return null;
     }
 
+    /**
+     * Legge un campo testuale JSON restituendo {@code null} quando assente.
+     * Chiamata da {@link #parseAndNormalize(String)}.
+     *
+     * @param root nodo JSON root
+     * @param key nome campo
+     * @return valore testuale o {@code null}
+     */
     private String textOrNull(JsonNode root, String key) {
         if (root == null || key == null) return null;
         JsonNode node = root.get(key);
@@ -266,6 +325,14 @@ public class MachineManualExtractionService {
         return node.toString();
     }
 
+    /**
+     * Converte un campo JSON in anno numerico quando possibile.
+     * Chiamata da {@link #parseAndNormalize(String)}.
+     *
+     * @param root nodo JSON root
+     * @param key nome campo da leggere
+     * @return anno estratto o {@code null}
+     */
     private Integer intOrNull(JsonNode root, String key) {
         if (root == null || key == null) return null;
         JsonNode node = root.get(key);
@@ -285,24 +352,59 @@ public class MachineManualExtractionService {
         return null;
     }
 
+    /**
+     * Riduce whitespace multipli per migliorare compattezza del contesto.
+     * Chiamata da {@link #buildRelevantExcerpt(List)}.
+     *
+     * @param text testo sorgente
+     * @return testo compattato
+     */
     private String compactWhitespace(String text) {
         if (text == null) return "";
         return text.replaceAll("\\s+", " ").trim();
     }
 
+    /**
+     * Estrae il testo da un documento gestendo valori null.
+     * Chiamata da {@link #buildRelevantExcerpt(List)}.
+     *
+     * @param doc documento pagina
+     * @return testo pagina o stringa vuota
+     */
     private String safeText(Document doc) {
         if (doc == null || doc.getText() == null) return "";
         return doc.getText();
     }
 
+    /**
+     * Verifica se una stringa è nulla o vuota.
+     * Chiamata da più helper di normalizzazione in questa classe.
+     *
+     * @param s valore da verificare
+     * @return {@code true} se nullo o blank
+     */
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
     }
 
+    /**
+     * Converte una stringa blank in {@code null}, mantenendo solo valori significativi.
+     * Chiamata da {@link #parseAndNormalize(String)}.
+     *
+     * @param s valore da pulire
+     * @return stringa trimmata o {@code null}
+     */
     private String blankToNull(String s) {
         return isBlank(s) ? null : s.trim();
     }
 
+    /**
+     * Deriva un nome macchina di fallback dal nome file del manuale.
+     * Chiamata da {@link #extractFromManual(MultipartFile)} quando il modello non produce il campo nome.
+     *
+     * @param fileName nome file originale
+     * @return nome derivato o {@code null}
+     */
     private String deriveNameFromFile(String fileName) {
         if (isBlank(fileName)) return null;
         String base = fileName.trim();
@@ -311,4 +413,3 @@ public class MachineManualExtractionService {
         return base.replace('_', ' ').replace('-', ' ').trim();
     }
 }
-
