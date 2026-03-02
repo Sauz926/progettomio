@@ -9,14 +9,14 @@
 <body>
     <nav class="navbar">
         <div class="nav-brand">
-            <span class="logo">⚙️</span>
+            <span class="logo" aria-hidden="true">RA</span>
             <h1>RAG Assessment</h1>
         </div>
         <div class="nav-links">
-            <a href="#documents" class="nav-link active" data-section="documents">📄 Documenti</a>
-            <a href="#machines" class="nav-link" data-section="machines">🔧 Macchinari</a>
-            <a href="#chatbot" class="nav-link" data-section="chatbot">💬 Chatbot</a>
-            <a href="#assessments" class="nav-link" data-section="assessments">📊 Assessment</a>
+            <a href="#documents" class="nav-link active" data-section="documents">Documenti</a>
+            <a href="#machines" class="nav-link" data-section="machines">Macchinari</a>
+            <a href="#chatbot" class="nav-link" data-section="chatbot">Chatbot</a>
+            <a href="#assessments" class="nav-link" data-section="assessments">Assessment</a>
         </div>
         <div class="nav-user">
             <span id="username"></span>
@@ -28,12 +28,12 @@
         <!-- Sezione Documenti -->
         <section id="documents" class="section active">
             <div class="section-header">
-                <h2>📄 Gestione Documenti PDF</h2>
+                <h2>Gestione Documenti PDF</h2>
                 <p>Carica i regolamenti e la documentazione per il sistema RAG</p>
             </div>
 
             <div class="upload-area" id="dropZone">
-                <div class="upload-icon">📁</div>
+                <div class="upload-icon" aria-hidden="true">PDF</div>
                 <h3>Trascina qui i file PDF</h3>
                 <p>oppure</p>
                 <input type="file" id="fileInput" accept=".pdf" hidden>
@@ -75,7 +75,7 @@
         <!-- Sezione Macchinari -->
         <section id="machines" class="section">
             <div class="section-header">
-                <h2>🔧 Gestione Macchinari</h2>
+                <h2>Gestione Macchinari</h2>
                 <p>Aggiungi e gestisci i macchinari da analizzare</p>
             </div>
 
@@ -86,7 +86,7 @@
                     <div class="ai-autofill-callout__text">
                         <div class="ai-autofill-callout__title">
                             <span class="badge badge-info">AI</span>
-                            <h4>🤖 Compila dal manuale PDF</h4>
+                            <h4>Compila dal manuale PDF</h4>
                         </div>
                         <p>Carica il manuale del macchinario e l'AI pre-compila automaticamente questo form.</p>
                         <p class="ai-autofill-callout__hint">Solo file PDF. I campi verranno pre-compilati e potrai modificarli prima di salvare.</p>
@@ -95,7 +95,7 @@
                     <div class="ai-autofill-callout__actions">
                         <input type="file" id="machineManualFileInput" accept=".pdf" hidden>
                         <button type="button" id="machineManualUploadBtn" class="btn btn-secondary">
-                            📎 Carica manuale PDF (AI)
+                            Carica manuale PDF (AI)
                         </button>
                     </div>
                 </div>
@@ -161,7 +161,7 @@
         <!-- Sezione Assessment -->
         <section id="assessments" class="section">
             <div class="section-header">
-                <h2>📊 Assessment Conformità</h2>
+                <h2>Assessment Conformità</h2>
                 <p>Visualizza e gestisci gli assessment di conformità</p>
             </div>
 
@@ -173,14 +173,14 @@
         <!-- Sezione Chatbot -->
         <section id="chatbot" class="section">
             <div class="section-header">
-                <h2>💬 Chatbot</h2>
+                <h2>Chatbot</h2>
                 <p>Fai domande sui documenti caricati nella sezione "Documenti"</p>
             </div>
 
             <div class="chatbot-shell" aria-label="Chatbot">
                 <div class="chatbot-header">
                     <div class="chatbot-header__title">
-                        <div class="chatbot-avatar" aria-hidden="true">🤖</div>
+                        <div class="chatbot-avatar" aria-hidden="true">AI</div>
                         <div class="chatbot-header__text">
                             <h3>Assistente</h3>
                             <div class="chatbot-header__subtitle" id="chatbotSubtitle">Risponde usando i documenti caricati (RAG).</div>
@@ -199,7 +199,7 @@
                 <div class="chatbot-edit-status" id="chatbotEditStatus" role="status" aria-live="polite"></div>
 
                 <details class="chatbot-settings" id="chatbotSettings">
-                    <summary>⚙️ Impostazioni</summary>
+                    <summary>Impostazioni</summary>
                     <div class="chatbot-settings__panel">
                         <label for="chatbotSystemPrompt" class="chatbot-settings__label">Istruzioni base (prompt di sistema)</label>
                         <textarea id="chatbotSystemPrompt" class="chatbot-settings__textarea" rows="6" maxlength="12000" placeholder="Scrivi qui le regole che guidano il chatbot…"></textarea>
