@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,12 +34,19 @@ public class DocumentController {
      * @return payload JSON con metadati del documento o errore di validazione/elaborazione
      */
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadPdf(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> uploadPdf(@RequestParam("file") MultipartFile file, Authentication authentication) {
+        if (!isAdmin(authentication)) {
+            return forbidden();
+        }
+
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Il file è vuoto"));
         }
 
-        if (!MediaType.APPLICATION_PDF_VALUE.equals(file.getContentType())) {
+        String contentType = file.getContentType();
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+        boolean isPdf = MediaType.APPLICATION_PDF_VALUE.equals(contentType) || originalName.endsWith(".pdf");
+        if (!isPdf) {
             return ResponseEntity.badRequest().body(Map.of("error", "Solo file PDF sono accettati"));
         }
 
@@ -71,7 +79,11 @@ public class DocumentController {
      * @return elenco documenti normalizzato per la risposta REST
      */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> getAllDocuments() {
+    public ResponseEntity<?> getAllDocuments(Authentication authentication) {
+        if (!isAdmin(authentication)) {
+            return forbidden();
+        }
+
         List<DocumentEntity> documents = pdfIngestionService.getAllDocuments();
 
         List<Map<String, Object>> response = documents.stream().map(doc -> {
@@ -97,7 +109,11 @@ public class DocumentController {
      * @return metadati del documento oppure 404 se non esiste
      */
     @GetMapping("/{id}")
-    public ResponseEntity<?> getDocument(@PathVariable Long id) {
+    public ResponseEntity<?> getDocument(@PathVariable Long id, Authentication authentication) {
+        if (!isAdmin(authentication)) {
+            return forbidden();
+        }
+
         try {
             DocumentEntity document = pdfIngestionService.getDocument(id);
 
@@ -126,7 +142,11 @@ public class DocumentController {
      * @return bytes PDF con header di download oppure 404
      */
     @GetMapping("/{id}/download")
-    public ResponseEntity<byte[]> downloadDocument(@PathVariable Long id) {
+    public ResponseEntity<?> downloadDocument(@PathVariable Long id, Authentication authentication) {
+        if (!isAdmin(authentication)) {
+            return forbidden();
+        }
+
         try {
             DocumentEntity document = pdfIngestionService.getDocument(id);
 
@@ -150,12 +170,25 @@ public class DocumentController {
      * @return conferma operazione o 404 se il documento non esiste
      */
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteDocument(@PathVariable Long id) {
+    public ResponseEntity<?> deleteDocument(@PathVariable Long id, Authentication authentication) {
+        if (!isAdmin(authentication)) {
+            return forbidden();
+        }
+
         try {
             pdfIngestionService.deleteDocument(id);
             return ResponseEntity.ok(Map.of("message", "Documento eliminato con successo"));
         } catch (RuntimeException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    private boolean isAdmin(Authentication authentication) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private ResponseEntity<Map<String, String>> forbidden() {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "Accesso riservato agli admin"));
     }
 }

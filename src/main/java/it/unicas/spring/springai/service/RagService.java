@@ -23,8 +23,7 @@ public class RagService {
 
     /**
      * Esegue una ricerca vettoriale con i parametri di default.
-     * Chiamata dai servizi di dominio che non devono personalizzare il numero di chunk
-     * (es. {@link AssessmentService} quando usa il contesto legacy).
+     * Chiamata dai servizi di dominio che non devono personalizzare il numero di chunk.
      *
      * @param query testo della domanda/requisito da cercare
      * @return lista di documenti rilevanti recuperati dal vector store
@@ -35,7 +34,7 @@ public class RagService {
 
     /**
      * Esegue la ricerca vettoriale con numero risultati configurabile.
-     * Chiamata da {@link ChatbotService}, {@link AssessmentService} e altri servizi che controllano la profondità RAG.
+     * Chiamata da chatbot, consultazione guidata e altri servizi che controllano la profondità RAG.
      *
      * @param query testo su cui fare similarità semantica
      * @param topK numero massimo di chunk da recuperare
@@ -58,7 +57,7 @@ public class RagService {
 
     /**
      * Costruisce direttamente il contesto testuale partendo dalla query.
-     * Chiamata dal fallback legacy in {@link AssessmentService#generateAssessment(Long)} dopo la risoluzione del macchinario.
+     * Chiamata dai servizi che hanno bisogno di un contesto testuale sintetico per il prompt.
      *
      * @param query domanda/descrizione da usare per la ricerca
      * @return contesto pronto da passare al modello LLM
@@ -70,7 +69,7 @@ public class RagService {
 
     /**
      * Concatena i chunk recuperati in un testo unico leggibile dal prompt.
-     * Chiamata internamente da {@link #buildContext(String)} e dal fallback legacy di {@link AssessmentService}.
+     * Chiamata internamente da {@link #buildContext(String)} e dai servizi RAG applicativi.
      *
      * @param documents chunk recuperati dal vector store
      * @return stringa contestuale con metadati fonte e contenuto
@@ -102,7 +101,7 @@ public class RagService {
 
     /**
      * Estrae e deduplica i nomi delle fonti dai metadati dei chunk.
-     * Chiamata principalmente da {@link AssessmentService} per popolare il campo "documenti utilizzati".
+     * Chiamata principalmente dai servizi che devono esporre le fonti usate in output.
      *
      * @param documents chunk usati nell'elaborazione
      * @return lista nomi documento senza duplicati

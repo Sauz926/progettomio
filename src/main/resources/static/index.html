@@ -3,277 +3,311 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RAG Assessment Macchinari</title>
+    <title>Device Compass AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">
-            <span class="logo" aria-hidden="true">RA</span>
-            <h1>RAG Assessment</h1>
-        </div>
-        <div class="nav-links">
-            <a href="#documents" class="nav-link active" data-section="documents">Documenti</a>
-            <a href="#machines" class="nav-link" data-section="machines">Macchinari</a>
-            <a href="#chatbot" class="nav-link" data-section="chatbot">Chatbot</a>
-            <a href="#assessments" class="nav-link" data-section="assessments">Assessment</a>
-        </div>
-        <div class="nav-user">
-            <span id="username"></span>
-            <a href="/logout" class="btn btn-logout">Logout</a>
-        </div>
-    </nav>
-
-    <main class="container">
-        <!-- Sezione Documenti -->
-        <section id="documents" class="section active">
-            <div class="section-header">
-                <h2>Gestione Documenti PDF</h2>
-                <p>Carica i regolamenti e la documentazione per il sistema RAG</p>
-            </div>
-
-            <div class="upload-area" id="dropZone">
-                <div class="upload-icon" aria-hidden="true">PDF</div>
-                <h3>Trascina qui i file PDF</h3>
-                <p>oppure</p>
-                <input type="file" id="fileInput" accept=".pdf" hidden>
-                <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
-                    Seleziona File
-                </button>
-                <p class="upload-hint">Solo file PDF, max 50MB</p>
-            </div>
-
-            <div class="upload-progress" id="uploadProgress" style="display: none;">
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <p id="uploadStatus">Caricamento in corso...</p>
-            </div>
-
-            <div class="documents-list">
-                <h3>Documenti Caricati</h3>
-                <div class="table-container">
-                    <table id="documentsTable">
-                        <thead>
-                            <tr>
-                                <th>Nome File</th>
-                                <th>Dimensione</th>
-                                <th>Data Caricamento</th>
-                                <th>Stato</th>
-                                <th>Chunks</th>
-                                <th>Azioni</th>
-                            </tr>
-                        </thead>
-                        <tbody id="documentsBody">
-                            <!-- Populated by JS -->
-                        </tbody>
-                    </table>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <div class="brand-mark">DC</div>
+                <div>
+                    <p class="eyebrow">Assistente RAG</p>
+                    <h1>Device Compass AI</h1>
                 </div>
             </div>
-        </section>
 
-        <!-- Sezione Macchinari -->
-        <section id="machines" class="section">
-            <div class="section-header">
-                <h2>Gestione Macchinari</h2>
-                <p>Aggiungi e gestisci i macchinari da analizzare</p>
+            <nav class="main-nav">
+                <button class="nav-pill active" data-section="consultazione">Consultazione</button>
+                <button class="nav-pill admin-only" data-section="dispositivi" hidden>Dispositivi</button>
+                <button class="nav-pill admin-only" data-section="documenti" hidden>Documenti</button>
+                <button class="nav-pill" data-section="chatbot">Chatbot</button>
+            </nav>
+
+            <div class="topbar-actions">
+                <span id="roleBadge" class="role-badge">Utente</span>
+                <a href="/logout" class="logout-link">Logout</a>
             </div>
+        </header>
 
-            <div class="card">
-                <h3 id="machineFormTitle">Nuovo Macchinario</h3>
+        <main class="workspace">
+            <section id="consultazione" class="section active">
+                <div class="section-intro">
+                    <div>
+                        <p class="eyebrow">Homepage</p>
+                        <h2>Consultazione guidata per scegliere il device giusto</h2>
+                        <p>Dimmi budget, utilizzo e preferenze. L'assistente incrocia il catalogo con le schede tecniche caricate e ti restituisce una raccomandazione motivata con top 3 alternative.</p>
+                    </div>
+                    <div class="hero-chip-list">
+                        <span>Smartphone</span>
+                        <span>Smartwatch</span>
+                        <span>Tablet</span>
+                    </div>
+                </div>
 
-                <div class="ai-autofill-callout" aria-label="Compilazione automatica da manuale PDF (AI)">
-                    <div class="ai-autofill-callout__text">
-                        <div class="ai-autofill-callout__title">
-                            <span class="badge badge-info">AI</span>
-                            <h4>Compila dal manuale PDF</h4>
+                <div class="consult-layout">
+                    <article class="panel chat-panel">
+                        <div class="panel-header">
+                            <div>
+                                <p class="panel-kicker">Consultazione</p>
+                                <h3>Assistente di scelta</h3>
+                            </div>
+                            <div class="panel-actions">
+                                <span id="consultPhaseBadge" class="phase-badge">RACCOLTA DATI</span>
+                                <button id="consultResetBtn" class="btn btn-secondary">Nuova consultazione</button>
+                                <button id="consultSaveBtn" class="btn btn-primary" hidden>Salva raccomandazione</button>
+                            </div>
                         </div>
-                        <p>Carica il manuale del macchinario e l'AI pre-compila automaticamente questo form.</p>
-                        <p class="ai-autofill-callout__hint">Solo file PDF. I campi verranno pre-compilati e potrai modificarli prima di salvare.</p>
-                        <div class="ai-autofill-callout__status" id="machineManualStatus" role="status" aria-live="polite"></div>
+
+                        <div id="consultMessages" class="chat-stream" aria-live="polite"></div>
+
+                        <div id="recommendationStrip" class="recommendation-strip" hidden>
+                            <div class="panel-kicker">Top 3 consigliati</div>
+                            <div id="recommendationCards" class="recommendation-grid"></div>
+                        </div>
+
+                        <form id="consultForm" class="composer">
+                            <textarea id="consultInput" rows="1" placeholder="Scrivi qui la tua risposta..."></textarea>
+                            <button type="submit" class="btn btn-primary">Invia</button>
+                        </form>
+                    </article>
+
+                    <aside class="panel sidebar-panel">
+                        <div class="sidebar-block">
+                            <p class="panel-kicker">Sessione attiva</p>
+                            <h3>Dettagli rapidi</h3>
+                            <dl class="meta-list">
+                                <div>
+                                    <dt>Sessione</dt>
+                                    <dd id="sessionCode">-</dd>
+                                </div>
+                                <div>
+                                    <dt>Fase</dt>
+                                    <dd id="sessionPhase">RACCOLTA DATI</dd>
+                                </div>
+                                <div>
+                                    <dt>Ultimo consiglio</dt>
+                                    <dd id="sessionRecommendation">Nessuno</dd>
+                                </div>
+                            </dl>
+                        </div>
+
+                        <div class="sidebar-block">
+                            <p class="panel-kicker">Storico</p>
+                            <h3>Raccomandazioni salvate</h3>
+                            <div id="historyList" class="history-list empty-state">
+                                Nessuna raccomandazione salvata.
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <section id="dispositivi" class="section admin-only-section" hidden>
+                <div class="section-intro">
+                    <div>
+                        <p class="eyebrow">Admin</p>
+                        <h2>Catalogo dispositivi</h2>
+                        <p>Gestisci smartphone, smartwatch e tablet disponibili per la consultazione guidata.</p>
                     </div>
-                    <div class="ai-autofill-callout__actions">
-                        <input type="file" id="machineManualFileInput" accept=".pdf" hidden>
-                        <button type="button" id="machineManualUploadBtn" class="btn btn-secondary">
-                            Carica manuale PDF (AI)
-                        </button>
-                    </div>
+                    <div id="statsGrid" class="stats-grid"></div>
                 </div>
 
-                <form id="machineForm" class="form-grid">
-                    <div class="form-group">
-                        <label for="machineName">Nome *</label>
-                        <input type="text" id="machineName" required placeholder="Es: Pressa Idraulica XY500">
-                    </div>
-                    <div class="form-group">
-                        <label for="machineProducer">Produttore</label>
-                        <input type="text" id="machineProducer" placeholder="Es: ABC Machinery">
-                    </div>
-                    <div class="form-group">
-                        <label for="machineModel">Modello</label>
-                        <input type="text" id="machineModel" placeholder="Es: XY500-PRO">
-                    </div>
-                    <div class="form-group">
-                        <label for="machineSerial">Numero di Serie</label>
-                        <input type="text" id="machineSerial" placeholder="Es: SN-2024-001234">
-                    </div>
-                    <div class="form-group">
-                        <label for="machineYear">Anno Produzione</label>
-                        <input type="number" id="machineYear" min="1900" max="2100" placeholder="Es: 2024">
-                    </div>
-                    <div class="form-group">
-                        <label for="machineCategory">Categoria</label>
-                        <select id="machineCategory">
-                            <option value="">Seleziona categoria</option>
-                            <option value="Presse">Presse</option>
-                            <option value="Torni">Torni</option>
-                            <option value="Fresatrici">Fresatrici</option>
-                            <option value="Robot industriali">Robot industriali</option>
-                            <option value="Nastri trasportatori">Nastri trasportatori</option>
-                            <option value="Macchine utensili">Macchine utensili</option>
-                            <option value="Macchine per imballaggio">Macchine per imballaggio</option>
-                            <option value="Altro">Altro</option>
-                        </select>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="machineDescription">Descrizione</label>
-                        <textarea id="machineDescription" rows="3" placeholder="Descrizione dettagliata del macchinario..."></textarea>
-                    </div>
-                    <div class="form-group full-width">
-                        <label for="machineSpecs">Specifiche Tecniche</label>
-                        <textarea id="machineSpecs" rows="4" placeholder="Potenza, dimensioni, funzionalità principali, dispositivi di sicurezza..."></textarea>
-                    </div>
-                    <div class="form-actions full-width">
-                        <button type="submit" class="btn btn-primary" id="machineSubmitBtn">Aggiungi Macchinario</button>
-                        <button type="reset" class="btn btn-secondary" id="machineResetBtn">Reset</button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="machines-list">
-                <h3>Macchinari Registrati</h3>
-                <div class="machines-grid" id="machinesGrid">
-                    <!-- Populated by JS -->
-                </div>
-            </div>
-        </section>
-
-        <!-- Sezione Assessment -->
-        <section id="assessments" class="section">
-            <div class="section-header">
-                <h2>Assessment Conformità</h2>
-                <p>Visualizza e gestisci gli assessment di conformità</p>
-            </div>
-
-            <div class="assessments-list" id="assessmentsList">
-                <!-- Populated by JS -->
-            </div>
-        </section>
-
-        <!-- Sezione Chatbot -->
-        <section id="chatbot" class="section">
-            <div class="section-header">
-                <h2>Chatbot</h2>
-                <p>Fai domande sui documenti caricati nella sezione "Documenti"</p>
-            </div>
-
-            <div class="chatbot-shell" aria-label="Chatbot">
-                <div class="chatbot-header">
-                    <div class="chatbot-header__title">
-                        <div class="chatbot-avatar" aria-hidden="true">AI</div>
-                        <div class="chatbot-header__text">
-                            <h3>Assistente</h3>
-                            <div class="chatbot-header__subtitle" id="chatbotSubtitle">Risponde usando i documenti caricati (RAG).</div>
+                <div class="panel">
+                    <div class="toolbar">
+                        <div class="toolbar-filters">
+                            <select id="deviceCategoryFilter">
+                                <option value="">Tutte le categorie</option>
+                                <option value="SMARTPHONE">Smartphone</option>
+                                <option value="SMARTWATCH">Smartwatch</option>
+                                <option value="TABLET">Tablet</option>
+                            </select>
+                            <input id="deviceBudgetFilter" type="number" min="0" placeholder="Budget massimo">
+                            <input id="deviceOsFilter" type="text" placeholder="Filtro OS">
+                            <button id="deviceFilterBtn" class="btn btn-secondary">Applica filtri</button>
+                        </div>
+                        <div class="toolbar-actions">
+                            <button id="deviceImportBtn" class="btn btn-secondary">Importa da PDF</button>
+                            <button id="deviceAddBtn" class="btn btn-primary">Aggiungi dispositivo</button>
                         </div>
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" id="chatbotNewChatBtn" title="Riavvia chat">
-                        Riavvia chat
-                    </button>
-                </div>
 
-                <div class="chatbot-hint" role="note">
-                    Suggerimento: chiedi riferimenti, definizioni o requisiti presenti nei PDF caricati (es. marcatura CE, requisiti essenziali, procedure).
-                </div>
-
-                <div class="chatbot-export-status" id="chatbotExportStatus" role="status" aria-live="polite"></div>
-                <div class="chatbot-edit-status" id="chatbotEditStatus" role="status" aria-live="polite"></div>
-
-                <details class="chatbot-settings" id="chatbotSettings">
-                    <summary>Impostazioni</summary>
-                    <div class="chatbot-settings__panel">
-                        <label for="chatbotSystemPrompt" class="chatbot-settings__label">Istruzioni base (prompt di sistema)</label>
-                        <textarea id="chatbotSystemPrompt" class="chatbot-settings__textarea" rows="6" maxlength="12000" placeholder="Scrivi qui le regole che guidano il chatbot…"></textarea>
-                        <div class="chatbot-settings__actions">
-                            <span class="chatbot-settings__status" id="chatbotPromptStatus" role="status" aria-live="polite"></span>
-                            <button type="button" class="btn btn-secondary btn-sm" id="chatbotPromptResetBtn">Ripristina</button>
-                        </div>
-                        <p class="chatbot-settings__hint">Esempio: “Rispondi in modo tecnico e dettagliato” oppure “Rispondi in modo semplice e riassuntivo”.</p>
-                        <p class="chatbot-settings__hint">Nota: queste impostazioni vengono salvate in questo browser.</p>
+                    <div class="table-shell">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Marca</th>
+                                    <th>Categoria</th>
+                                    <th>OS</th>
+                                    <th>Prezzo</th>
+                                    <th>Disponibile</th>
+                                    <th>Azioni</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deviceTableBody"></tbody>
+                        </table>
                     </div>
-                </details>
+                </div>
+            </section>
 
-                <div class="chatbot-messages" id="chatbotMessages" role="log" aria-live="polite" aria-relevant="additions" aria-label="Messaggi chat">
+            <section id="documenti" class="section admin-only-section" hidden>
+                <div class="section-intro">
+                    <div>
+                        <p class="eyebrow">Admin</p>
+                        <h2>Documenti e schede tecniche</h2>
+                        <p>Carica PDF ufficiali per alimentare il vector store e migliorare le raccomandazioni RAG.</p>
+                    </div>
                 </div>
 
-                <form class="chatbot-composer" id="chatbotComposer" aria-label="Compositore messaggi" autocomplete="off">
-                    <label class="sr-only" for="chatbotInput">Scrivi un messaggio</label>
-                    <textarea id="chatbotInput" class="chat-input" rows="1" placeholder="Scrivi una domanda sui documenti…"></textarea>
-                    <button type="submit" class="btn btn-primary" id="chatbotSendBtn">
-                        Invia
-                    </button>
-                </form>
-            </div>
-        </section>
-    </main>
+                <div class="document-grid">
+                    <article class="panel upload-panel">
+                        <p class="panel-kicker">Upload PDF</p>
+                        <h3>Nuova scheda tecnica</h3>
+                        <p>Accettiamo PDF fino a 50MB. Il sistema li spezza in chunk e li indicizza su pgvector.</p>
+                        <button id="documentUploadBtn" class="btn btn-primary">Carica documento</button>
+                    </article>
 
-    <!-- Modal Assessment -->
-    <div class="modal" id="assessmentModal">
-        <div class="modal-content modal-large">
+                    <article class="panel">
+                        <p class="panel-kicker">Archivio</p>
+                        <h3>Documenti caricati</h3>
+                        <div class="table-shell">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nome file</th>
+                                        <th>Dimensione</th>
+                                        <th>Data</th>
+                                        <th>Stato</th>
+                                        <th>Chunk</th>
+                                        <th>Azioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="documentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
+            </section>
+
+            <section id="chatbot" class="section">
+                <div class="section-intro">
+                    <div>
+                        <p class="eyebrow">Chatbot libero</p>
+                        <h2>Domande rapide sul catalogo e sulle schede tecniche</h2>
+                        <p>Usa la chat per confronti, specifiche tecniche e domande puntuali supportate dai PDF caricati.</p>
+                    </div>
+                </div>
+
+                <article class="panel chat-panel">
+                    <div class="panel-header">
+                        <div>
+                            <p class="panel-kicker">RAG chat</p>
+                            <h3>Tech chatbot</h3>
+                        </div>
+                        <div class="panel-actions">
+                            <button id="chatbotResetBtn" class="btn btn-secondary">Nuova chat</button>
+                        </div>
+                    </div>
+
+                    <div id="chatbotMessages" class="chat-stream" aria-live="polite"></div>
+
+                    <form id="chatbotForm" class="composer">
+                        <textarea id="chatbotInput" rows="1" placeholder="Chiedi un confronto, una specifica o un dubbio tecnico..."></textarea>
+                        <button type="submit" class="btn btn-primary">Invia</button>
+                    </form>
+                </article>
+            </section>
+        </main>
+    </div>
+
+    <div id="deviceModal" class="modal" hidden>
+        <div class="modal-card">
             <div class="modal-header">
-                <h2 id="modalTitle">Assessment Conformità</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div>
+                    <p class="panel-kicker">Catalogo</p>
+                    <h3 id="deviceModalTitle">Nuovo dispositivo</h3>
+                </div>
+                <button id="deviceModalClose" class="icon-btn" type="button">×</button>
             </div>
-            <div class="modal-body" id="assessmentDetails">
-                <!-- Populated by JS -->
-            </div>
+
+            <form id="deviceForm" class="form-grid">
+                <input id="deviceId" type="hidden">
+
+                <label>
+                    <span>Nome</span>
+                    <input id="deviceName" type="text" required>
+                </label>
+
+                <label>
+                    <span>Marca</span>
+                    <input id="deviceBrand" type="text" required>
+                </label>
+
+                <label>
+                    <span>Modello</span>
+                    <input id="deviceModel" type="text">
+                </label>
+
+                <label>
+                    <span>Categoria</span>
+                    <select id="deviceCategory" required>
+                        <option value="SMARTPHONE">Smartphone</option>
+                        <option value="SMARTWATCH">Smartwatch</option>
+                        <option value="TABLET">Tablet</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>Prezzo</span>
+                    <input id="devicePrice" type="number" min="0" step="0.01">
+                </label>
+
+                <label>
+                    <span>Sistema operativo</span>
+                    <input id="deviceOs" type="text">
+                </label>
+
+                <label class="checkbox-field">
+                    <input id="deviceAvailable" type="checkbox" checked>
+                    <span>Disponibile</span>
+                </label>
+
+                <label class="full-width">
+                    <span>Descrizione</span>
+                    <textarea id="deviceDescription" rows="3"></textarea>
+                </label>
+
+                <label class="full-width">
+                    <span>Specifiche tecniche</span>
+                    <textarea id="deviceSpecs" rows="4"></textarea>
+                </label>
+
+                <label class="full-width">
+                    <span>Punti di forza</span>
+                    <textarea id="deviceStrengths" rows="3"></textarea>
+                </label>
+
+                <label class="full-width">
+                    <span>Punti deboli</span>
+                    <textarea id="deviceWeaknesses" rows="3"></textarea>
+                </label>
+
+                <div class="form-actions full-width">
+                    <button class="btn btn-secondary" id="deviceCancelBtn" type="button">Annulla</button>
+                    <button class="btn btn-primary" type="submit">Salva dispositivo</button>
+                </div>
+            </form>
         </div>
     </div>
 
-    <!-- Modal Chatbot CSV (UI only) -->
-    <div class="modal" id="chatbotCsvModal" aria-hidden="true">
-        <div class="modal-content chatbot-csv-modal-content" role="dialog" aria-modal="true" aria-labelledby="chatbotCsvModalTitle">
-            <div class="modal-header">
-                <h2 id="chatbotCsvModalTitle">Salvare la chat in CSV prima del riavvio?</h2>
-                <button type="button" class="modal-close" id="chatbotCsvModalCloseBtn" aria-label="Chiudi">&times;</button>
-            </div>
-            <div class="modal-body chatbot-csv-modal-body">
-                <p>Stai per riavviare la conversazione del chatbot.</p>
-                <p>Vuoi salvare prima la chat in formato CSV?</p>
+    <input id="deviceImportInput" type="file" accept=".pdf,application/pdf" hidden>
+    <input id="documentInput" type="file" accept=".pdf,application/pdf" hidden>
 
-                <div class="chatbot-csv-preview">
-                    <h3>Anteprima contenuto file CSV</h3>
-                    <ul>
-                        <li>Messaggi utente e risposte assistente in ordine cronologico</li>
-                        <li>Ruolo del messaggio (Utente/Chatbot) chiaramente distinto</li>
-                        <li>Data e ora della conversazione</li>
-                    </ul>
-                </div>
-
-                <div class="chatbot-csv-actions">
-                    <button type="button" class="btn btn-primary" id="chatbotCsvYesBtn">Sì, salva CSV e riavvia</button>
-                    <button type="button" class="btn btn-secondary" id="chatbotCsvNoBtn">No, riavvia senza salvare</button>
-                    <button type="button" class="btn btn-secondary" id="chatbotCsvCancelBtn">Annulla</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Loading Overlay -->
-    <div class="loading-overlay" id="loadingOverlay">
-        <div class="loading-spinner"></div>
-        <p>Generazione assessment in corso...</p>
-        <p class="loading-hint">L'analisi potrebbe richiedere alcuni minuti</p>
-    </div>
+    <div id="toast" class="toast" hidden></div>
 
     <script src="/js/app.js"></script>
 </body>

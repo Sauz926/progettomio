@@ -1,12 +1,12 @@
 package it.unicas.spring.springai;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Answers;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,8 +18,9 @@ import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequ
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.ai.vectorstore.VectorStore;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -55,20 +56,10 @@ class LoginFlowIntegrationTest {
     @MockBean
     private ChatClient.Builder chatClientBuilder;
 
-    /**
-     * Valida il flusso end-to-end: login utente, creazione macchinario, generazione assessment e download PDF.
-     * Chiamata dal runner JUnit 5 per assicurare coerenza del percorso applicativo principale.
-     *
-     * @throws Exception in caso di errori HTTP/mock o serializzazione
-     */
     @Test
-    void user_can_login_and_reach_final_results_flow() throws Exception {
+    void user_can_login_receive_recommendation_save_and_download_pdf() throws Exception {
         mockMvc.perform(get("/index.html"))
                 .andExpect(status().is3xxRedirection());
-
-        mockMvc.perform(get("/login"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Credenziali di test")));
 
         MvcResult login = mockMvc.perform(SecurityMockMvcRequestBuilders.formLogin("/login")
                         .user("user")
@@ -80,101 +71,157 @@ class LoginFlowIntegrationTest {
 
         MockHttpSession session = (MockHttpSession) login.getRequest().getSession(false);
 
-        Document ragChunk = new Document(
-                "Articolo 10 comma 2: requisiti essenziali di sicurezza e marcatura CE.",
-                Map.of("fileName", "Regolamento UE 2023-1230.pdf", "page", 10)
-        );
+        mockMvc.perform(get("/index.html").session(session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Device Compass AI")));
 
-        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(ragChunk));
-
-        String explainableAssessmentJson = """
-                {
-                  "riepilogoConformita": "Riepilogo conformità (test).",
-                  "nonConformitaRilevate": [
-                    {"text": "Mancanza marcatura CE visibile", "chunkIds": [1]}
-                  ],
-                  "raccomandazioni": [
-                    {"text": "Applicare marcatura CE e aggiornare la documentazione", "chunkIds": [1]}
-                  ],
-                  "livelloRischio": "MEDIO",
-                  "punteggioConformita": 72
-                }
-                """;
+        when(vectorStore.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
+                new Document("Pixel 9 offre Android pulito, buona fotocamera e batteria affidabile.", Map.of("fileName", "pixel9.pdf", "page", 4)),
+                new Document("iPhone 16 Pro eccelle in video e integrazione ecosistema Apple.", Map.of("fileName", "iphone16pro.pdf", "page", 2))
+        ));
 
         ChatClient chatClient = mock(ChatClient.class, Answers.RETURNS_DEEP_STUBS);
         when(chatClientBuilder.build()).thenReturn(chatClient);
-        when(chatClient.prompt()
-                .system(anyString())
-                .user(anyString())
-                .call()
-                .content()).thenReturn(explainableAssessmentJson);
-
-        mockMvc.perform(get("/index.html").session(session))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("RAG Assessment")));
-
-        String machinePayload = """
+        when(chatClient.prompt().system(anyString()).user(anyString()).call().content()).thenReturn(
+                """
                 {
-                  "nome": "Pressa Idraulica Test",
-                  "produttore": "ACME",
-                  "modello": "X-500",
-                  "numeroSerie": "SN-TEST-001",
-                  "annoProduzione": 2024,
-                  "categoria": "Presse",
-                  "descrizione": "Macchinario usato per test end-to-end",
-                  "specificheTecniche": "Potenza 5kW"
+                  "fase":"RACCOMANDAZIONE",
+                  "raccomandazionePrincipale":"Pixel 9",
+                  "motivazione":"Pixel 9 e la scelta migliore per budget, fotografia e preferenza Android.",
+                  "alternative":[
+                    {
+                      "nome":"Pixel 9",
+                      "marca":"Google",
+                      "prezzoEuro":899,
+                      "motivazione":"Bilancia fotocamera, software pulito e prezzo coerente.",
+                      "punteggio":92
+                    },
+                    {
+                      "nome":"iPhone 16 Pro",
+                      "marca":"Apple",
+                      "prezzoEuro":1349,
+                      "motivazione":"Alternativa premium per chi privilegia video ed ecosistema.",
+                      "punteggio":80
+                    }
+                  ]
                 }
-                """;
+                """,
+                """
+                {
+                  "fase":"RACCOMANDAZIONE",
+                  "raccomandazionePrincipale":"Pixel 9",
+                  "motivazione":"Pixel 9 e la scelta migliore per budget, fotografia e preferenza Android.",
+                  "alternative":[
+                    {
+                      "nome":"Pixel 9",
+                      "marca":"Google",
+                      "prezzoEuro":899,
+                      "motivazione":"Bilancia fotocamera, software pulito e prezzo coerente.",
+                      "punteggio":92
+                    },
+                    {
+                      "nome":"iPhone 16 Pro",
+                      "marca":"Apple",
+                      "prezzoEuro":1349,
+                      "motivazione":"Alternativa premium per chi privilegia video ed ecosistema.",
+                      "punteggio":80
+                    }
+                  ]
+                }
+                """
+        );
 
-        MvcResult createdMachineResult = mockMvc.perform(post("/api/macchinari")
+        String sessioneId = "session-test-001";
+        List<Map<String, String>> history = new ArrayList<>();
+        history.add(turn("assistant", "Ciao! Sono il tuo assistente per la scelta del dispositivo perfetto. Per iniziare, dimmi: stai cercando uno smartphone, uno smartwatch o un tablet?"));
+
+        MvcResult firstResponse = mockMvc.perform(post("/api/consultazione/chat")
                         .session(session)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(machinePayload))
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessioneId", sessioneId,
+                                "userMessage", "Cerco uno smartphone",
+                                "conversationHistory", history
+                        ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.nome").value("Pressa Idraulica Test"))
+                .andExpect(jsonPath("$.fase").value("RACCOLTA_DATI"))
                 .andReturn();
+        history.add(turn("user", "Cerco uno smartphone"));
+        history.add(turn("assistant", objectMapper.readTree(firstResponse.getResponse().getContentAsString()).get("risposta").asText()));
 
-        JsonNode createdMachine = objectMapper.readTree(createdMachineResult.getResponse().getContentAsString());
-        long machineId = createdMachine.get("id").asLong();
-
-        MvcResult createdAssessmentResult = mockMvc.perform(post("/api/macchinari/{id}/assessment", machineId).session(session))
+        MvcResult secondResponse = mockMvc.perform(post("/api/consultazione/chat")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessioneId", sessioneId,
+                                "userMessage", "Massimo 900 euro",
+                                "conversationHistory", history
+                        ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.macchinarioId").value(machineId))
-                .andExpect(jsonPath("$.macchinarioNome").value("Pressa Idraulica Test"))
-                .andExpect(jsonPath("$.punteggioConformita").value(72))
-                .andExpect(jsonPath("$.livelloRischio").value("MEDIO"))
-                .andExpect(jsonPath("$.documentiUtilizzati").value(containsString("Regolamento UE 2023-1230.pdf")))
+                .andExpect(jsonPath("$.fase").value("RACCOLTA_DATI"))
                 .andReturn();
+        history.add(turn("user", "Massimo 900 euro"));
+        history.add(turn("assistant", objectMapper.readTree(secondResponse.getResponse().getContentAsString()).get("risposta").asText()));
 
-        JsonNode createdAssessment = objectMapper.readTree(createdAssessmentResult.getResponse().getContentAsString());
-        long assessmentId = createdAssessment.get("id").asLong();
-
-        mockMvc.perform(get("/api/macchinari/{id}/assessments", machineId).session(session))
+        MvcResult thirdResponse = mockMvc.perform(post("/api/consultazione/chat")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessioneId", sessioneId,
+                                "userMessage", "Lo uso soprattutto per foto e video",
+                                "conversationHistory", history
+                        ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(assessmentId))
-                .andExpect(jsonPath("$[0].macchinarioId").value(machineId));
+                .andExpect(jsonPath("$.fase").value("ANALISI"))
+                .andReturn();
+        history.add(turn("user", "Lo uso soprattutto per foto e video"));
+        history.add(turn("assistant", objectMapper.readTree(thirdResponse.getResponse().getContentAsString()).get("risposta").asText()));
 
-        mockMvc.perform(get("/api/assessments").session(session))
+        MvcResult finalResponse = mockMvc.perform(post("/api/consultazione/chat")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessioneId", sessioneId,
+                                "userMessage", "Preferisco Android e per me conta molto la fotocamera",
+                                "conversationHistory", history
+                        ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(assessmentId))
-                .andExpect(jsonPath("$[0].macchinarioNome").value("Pressa Idraulica Test"));
+                .andExpect(jsonPath("$.fase").value("RACCOMANDAZIONE"))
+                .andExpect(jsonPath("$.dispositiviConsigliati[0].nome").value("Pixel 9"))
+                .andReturn();
+        history.add(turn("user", "Preferisco Android e per me conta molto la fotocamera"));
+        history.add(turn("assistant", objectMapper.readTree(finalResponse.getResponse().getContentAsString()).get("risposta").asText()));
 
-        mockMvc.perform(get("/api/assessments/{id}", assessmentId).session(session))
+        mockMvc.perform(post("/api/consultazione/salva")
+                        .session(session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "sessioneId", sessioneId,
+                                "conversationHistory", history
+                        ))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(assessmentId))
-                .andExpect(jsonPath("$.macchinarioNome").value("Pressa Idraulica Test"))
-                .andExpect(jsonPath("$.riepilogoConformita").value("Riepilogo conformità (test)."));
+                .andExpect(jsonPath("$.raccomandazionePrincipale").value("Pixel 9"));
 
-        MvcResult pdfDownload = mockMvc.perform(get("/api/macchinari/{id}/assessments/latest/pdf", machineId)
+        mockMvc.perform(get("/api/consultazione/storico").session(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sessioneId").value(sessioneId))
+                .andExpect(jsonPath("$[0].raccomandazionePrincipale").value("Pixel 9"));
+
+        MvcResult pdfDownload = mockMvc.perform(get("/api/consultazione/{sessioneId}/pdf", sessioneId)
                         .session(session)
                         .accept(MediaType.APPLICATION_PDF))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, containsString("application/pdf")))
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("attachment")))
                 .andReturn();
 
         byte[] pdfBytes = pdfDownload.getResponse().getContentAsByteArray();
         org.hamcrest.MatcherAssert.assertThat(pdfBytes.length, greaterThan(100));
+    }
+
+    private Map<String, String> turn(String role, String content) {
+        Map<String, String> turn = new HashMap<>();
+        turn.put("role", role);
+        turn.put("content", content);
+        return turn;
     }
 }
